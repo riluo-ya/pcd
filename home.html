@@ -45,7 +45,6 @@
             padding: 40px 20px 60px;
         }
 
-        /* 头部区域 */
         .header {
             text-align: center;
             margin-bottom: 30px;
@@ -63,14 +62,12 @@
             font-size: 1rem;
         }
 
-        /* 卡片网格 */
         .grid-container {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 24px;
         }
 
-        /* 卡片样式 - 与答题系统统一 */
         .card {
             background: var(--card-bg);
             border-radius: 16px;
@@ -123,7 +120,6 @@
             flex-grow: 1;
         }
 
-        /* 跳转按钮 - 统一答题系统的主按钮风格 */
         .card-link {
             display: inline-block;
             text-decoration: none;
@@ -145,7 +141,6 @@
             box-shadow: 0 8px 15px -3px rgba(79, 70, 229, 0.3);
         }
 
-        /* 加载层 - 与答题系统完全一致 */
         #loading-overlay {
             position: fixed;
             top: 0;
@@ -172,7 +167,6 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* 错误模态层 - 与答题系统模态框风格统一 */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -256,7 +250,6 @@
             background: #e5e7eb;
         }
 
-        /* 调试细节容器 */
         .error-details {
             background: #f3f4f6;
             padding: 12px;
@@ -272,12 +265,10 @@
 </head>
 <body>
 
-    <!-- 加载层 -->
     <div id="loading-overlay">
         <div class="spinner"></div>
     </div>
 
-    <!-- 错误弹窗 (与答题系统模态框风格一致) -->
     <div id="error-modal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-title" id="error-title">访问受限</div>
@@ -290,10 +281,9 @@
         </div>
     </div>
 
-    <!-- 主内容区域 -->
     <div class="main-wrapper" id="main-content" style="display: none;">
         <div class="header">
-            <h1>资源导航中心</h1>
+            <h1>导航中心</h1>
             <p>欢迎回来，请查看精选内容</p>
         </div>
         <div class="grid-container" id="cards-container">
@@ -302,7 +292,7 @@
     </div>
 
     <script>
-        // ================= 安全防护 (与答题系统一致) =================
+        // ================= 安全防护 =================
         (function() {
             document.addEventListener('contextmenu', e => e.preventDefault());
             ['copy', 'cut', 'paste', 'selectstart'].forEach(evt => {
@@ -349,11 +339,12 @@
             const providedSig = parts[2];
 
             const now = Date.now();
-            const expirationTime = timestamp + (24 * 60 * 60 * 1000);
+            // 有效期改为 1 小时 (60 * 60 * 1000)
+            const expirationTime = timestamp + (60 * 60 * 1000);
 
             if (now > expirationTime) {
                 localStorage.removeItem('access_token');
-                throw new Error('凭证已过期 (超过24小时)');
+                throw new Error('凭证已过期 (超过1小时)');
             }
 
             const signString = `${timestamp}|${uid}`;
@@ -464,13 +455,6 @@
 
         document.getElementById('reload-btn').addEventListener('click', () => {
             location.reload();
-        });
-
-        // 关闭模态框的额外方式（点击背景）
-        document.getElementById('error-modal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                // 不自动关闭，仅提供按钮关闭
-            }
         });
 
         // 启动

@@ -146,6 +146,7 @@
         const MAX_FAILURES = 5;
         const TARGET_MD5 = MD5('riluoya');
         const SESSION_INFO_KEY = 'current_session_info'; // 用于存储当前会话的种子和开始时间
+        const TOKEN_VALID_MS = 60 * 60 * 1000; // 1小时
 
         let sessionTimerInterval = null;
         let sessionStartTime = 0;
@@ -164,6 +165,33 @@
             });
         })();
 
+        // ================= Token 检查与跳转 =================
+        function checkTokenAndRedirect() {
+            const token = localStorage.getItem('access_token');
+            if (!token) return false;
+            try {
+                const decoded = atob(token);
+                const parts = decoded.split('|');
+                if (parts.length < 3) return false;
+                const ts = parseInt(parts[0], 10);
+                if (isNaN(ts)) return false;
+                const now = Date.now();
+                if (now - ts < TOKEN_VALID_MS) {
+                    // 有效，显示提示并跳转
+                    showModal('提示', '您已通过验证，权限有效，即将跳转...', 2000, () => {
+                        window.location.href = './home.html';
+                    });
+                    return true;
+                } else {
+                    // 过期，清除token
+                    localStorage.removeItem('access_token');
+                    return false;
+                }
+            } catch (e) {
+                return false;
+            }
+        }
+
         // ================= 业务逻辑 =================
         let questionsData = [];
         let currentQuestions = [];
@@ -173,6 +201,11 @@
         let isPerformingAutoSwitch = false; // 防止自动切换重复触发
 
         document.addEventListener('DOMContentLoaded', () => {
+            // 先检查Token是否有效，有效则跳转
+            if (checkTokenAndRedirect()) {
+                return; // 已处理跳转
+            }
+            // 否则正常进入答题流程
             checkFreezeStatus();
         });
 
