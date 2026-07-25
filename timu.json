@@ -36,7 +36,7 @@
     "id": "q04",
     "title": "Phigros在达成什么条件下会自动解锁 IN 难度？",
     "options": [
-      { "text": "rks到达11.00" },
+      { "text": "rks达到11.00" },
       { "text": "rks超过12.00" },
       { "text": "rks到达10.00" },
       { "text": "不论什么时候不会自动解锁IN" }
@@ -157,5 +157,17 @@
       { "text": "凌日潮汐" }
     ],
     "answerText": "凌日潮汐"
+  },
+  {
+    "id": "q15",
+    "title": "以下哪个是Phigros独占曲？",
+    "options": [
+      { "text": "方舟：Ark" },
+      { "text": "Verrückt" },
+      { "text": "SpeedUp!" },
+      { "text": "ABYSSMOTION192.333" },
+      { "text": "Leaf." }
+    ],
+    "answerText": "SpeedUp!"
   }
 ]
