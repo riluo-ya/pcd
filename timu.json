@@ -169,5 +169,18 @@
       { "text": "Leaf." }
     ],
     "answerText": "SpeedUp!"
+  },
+  {
+    "id": "q16",
+    "title": "Phigros单曲最高分理论值为？",
+    "options": [
+      { "text": "1000000" },
+      { "text": "1100000" },
+      { "text": "2000000" },
+      { "text": "100000" },
+      { "text": "10000000" },
+      { "text": "114514" }
+    ],
+    "answerText": "1000000"
   }
 ]
