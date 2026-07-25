@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>蓝奏云网盘下载</title>
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --primary-hover: #4338CA;
+            --bg-gradient: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            --card-bg: rgba(255, 255, 255, 0.98);
+            --text-main: #1f2937;
+            --text-sub: #6b7280;
+            --border-color: #e5e7eb;
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --error-red: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            outline: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: var(--bg-gradient);
+            min-height: 100vh;
+            color: var(--text-main);
+            user-select: none;
+            -webkit-user-select: none;
+            overflow-x: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .main-wrapper {
+            width: 100%;
+            max-width: 1200px;
+            padding: 40px 20px 60px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            margin: 0;
+            color: var(--text-main);
+            letter-spacing: -0.025em;
+        }
+        .header p {
+            color: var(--text-sub);
+            margin-top: 8px;
+            font-size: 1rem;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.08);
+        }
+
+        .card-img-wrapper {
+            width: 100%;
+            height: 180px;
+            overflow: hidden;
+            background: var(--border-color);
+        }
+        .card-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s ease;
+        }
+        .card:hover .card-img {
+            transform: scale(1.05);
+        }
+
+        .card-body {
+            padding: 20px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            color: var(--text-main);
+        }
+        .card-desc {
+            font-size: 0.95rem;
+            color: var(--text-sub);
+            margin: 0 0 20px 0;
+            line-height: 1.5;
+            flex-grow: 1;
+        }
+
+        /* 按钮区域：支持多按钮并排 */
+        .card-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .card-link {
+            display: inline-block;
+            text-decoration: none;
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            text-align: center;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow-md);
+            cursor: pointer;
+            flex: 1 1 auto;
+            min-width: 100px;
+        }
+        .card-link:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 8px 15px -3px rgba(79, 70, 229, 0.3);
+        }
+
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg-gradient);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.3s ease;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(79, 70, 229, 0.3);
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(5px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            padding: 20px;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            text-align: center;
+            max-width: 360px;
+            width: 100%;
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.9);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
+        }
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--error-red);
+        }
+        .modal-msg {
+            color: var(--text-sub);
+            margin-bottom: 24px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            font-size: 0.95rem;
+        }
+        .modal-btn-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn-primary {
+            padding: 10px 24px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+        .btn-secondary {
+            padding: 10px 24px;
+            background: #f3f4f6;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+
+        .error-details {
+            background: #f3f4f6;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 15px 0 0 0;
+            font-size: 0.85rem;
+            color: #374151;
+            text-align: left;
+            word-break: break-all;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+    </div>
+
+    <div id="error-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-title" id="error-title">访问受限</div>
+            <div class="modal-msg" id="error-message"></div>
+            <div id="error-details" class="error-details"></div>
+            <div class="modal-btn-group" style="margin-top: 15px;">
+                <button id="back-btn" class="btn-secondary">返回答题页</button>
+                <button id="reload-btn" class="btn-primary">刷新重试</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-wrapper" id="main-content" style="display: none;">
+        <div class="header">
+            <h1>蓝奏云网盘下载</h1>
+            <p>欢迎回来，请查看精选内容</p>
+        </div>
+        <div class="grid-container" id="cards-container">
+            <!-- 卡片由 JS 动态生成 -->
+        </div>
+    </div>
+
+    <script>
+        // ================= 安全防护 =================
+        (function() {
+            document.addEventListener('contextmenu', e => e.preventDefault());
+            ['copy', 'cut', 'paste', 'selectstart'].forEach(evt => {
+                document.addEventListener(evt, e => { e.preventDefault(); return false; });
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(e.key.toUpperCase())) || (e.ctrlKey && e.key.toLowerCase() === 'u')) {
+                    e.preventDefault();
+                }
+            });
+        })();
+
+        // djb2 哈希算法 (必须与 index.html 完全一致)
+        function simpleHash(str) {
+            let hash = 5381;
+            for (let i = 0; i < str.length; i++) {
+                hash = ((hash << 5) + hash) + str.charCodeAt(i);
+            }
+            return (hash >>> 0).toString(16);
+        }
+
+        // ================= 业务逻辑 =================
+
+        async function verifyAccess() {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                throw new Error('无凭证信息');
+            }
+
+            let parts;
+            try {
+                const payloadStr = atob(token);
+                parts = payloadStr.split('|');
+            } catch (e) {
+                throw new Error('凭证格式损坏');
+            }
+
+            if (parts.length !== 3) {
+                throw new Error('凭证结构错误');
+            }
+
+            const timestamp = parseInt(parts[0], 10);
+            const uid = parts[1];
+            const providedSig = parts[2];
+
+            const now = Date.now();
+            // 有效期改为 1 小时 (60 * 60 * 1000)
+            const expirationTime = timestamp + (60 * 60 * 1000);
+
+            if (now > expirationTime) {
+                localStorage.removeItem('access_token');
+                throw new Error('凭证已过期 (超过1小时)');
+            }
+
+            const signString = `${timestamp}|${uid}`;
+            const expectedSig = simpleHash(signString);
+
+            if (providedSig !== expectedSig) {
+                console.error("签名不匹配:", { provided: providedSig, expected: expectedSig });
+                throw new Error('签名校验失败 (凭证可能被篡改)');
+            }
+
+            return true;
+        }
+
+        async function init() {
+            try {
+                await verifyAccess();
+            } catch (err) {
+                console.warn('访问被拒绝:', err);
+                showAuthError(err.message);
+                return;
+            }
+
+            try {
+                const response = await fetch('./philzy.json?t=' + Date.now());
+                if (!response.ok) throw new Error('网络请求失败');
+                const data = await response.json();
+                renderCards(data);
+                hideLoading();
+            } catch (err) {
+                showDataError(err.message);
+            }
+        }
+
+        // ================= 核心修改：渲染卡片（支持多链接与自定义按钮文本） =================
+        function renderCards(items) {
+            const container = document.getElementById('cards-container');
+            container.innerHTML = '';
+
+            if (!Array.isArray(items) || items.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:var(--text-sub); padding:40px;">暂无内容</p>';
+                document.getElementById('main-content').style.display = 'block';
+                return;
+            }
+
+            items.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                
+                // 构建按钮 HTML
+                let actionsHtml = '';
+                
+                // 情况1：存在 urls 数组（支持多链接）
+                if (Array.isArray(item.urls) && item.urls.length > 0) {
+                    const buttons = item.urls.map(link => {
+                        const url = escapeHtml(link.url || '');
+                        const text = escapeHtml(link.text || '点击跳转');
+                        return `<a href="${url}" target="_blank" rel="noopener" class="card-link">${text}</a>`;
+                    }).join('');
+                    actionsHtml = `<div class="card-actions">${buttons}</div>`;
+                }
+                // 情况2：存在单个 url（兼容旧格式）
+                else if (item.url) {
+                    const url = escapeHtml(item.url);
+                    // 优先使用 urlText，否则默认"点击跳转"
+                    const text = escapeHtml(item.urlText || '点击跳转');
+                    actionsHtml = `<div class="card-actions"><a href="${url}" target="_blank" rel="noopener" class="card-link">${text}</a></div>`;
+                }
+                // 情况3：无链接
+                else {
+                    actionsHtml = '';
+                }
+
+                card.innerHTML = `
+                    <div class="card-img-wrapper">
+                        <img src="${escapeHtml(item.img)}" alt="${escapeHtml(item.title)}" class="card-img" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22600%22 height=%22400%22%3E%3Crect fill=%22%23e5e7eb%22 width=%22600%22 height=%22400%22/%3E%3Ctext fill=%22%236b7280%22 font-size=%221.2rem%22 x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22%3E暂无图片%3C/text%3E%3C/svg%3E'">
+                    </div>
+                    <div class="card-body">
+                        <h3 class="card-title">${escapeHtml(item.title)}</h3>
+                        <p class="card-desc">${escapeHtml(item.desc)}</p>
+                        ${actionsHtml}
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+
+            document.getElementById('main-content').style.display = 'block';
+        }
+
+        // ================= UI 辅助函数 =================
+
+        function hideLoading() {
+            const overlay = document.getElementById('loading-overlay');
+            overlay.style.opacity = '0';
+            overlay.style.visibility = 'hidden';
+            setTimeout(() => {
+                if (overlay.style.visibility === 'hidden') {
+                    overlay.style.display = 'none';
+                }
+            }, 300);
+        }
+
+        function showAuthError(msg) {
+            document.getElementById('error-title').innerText = '访问受限';
+            document.getElementById('error-message').innerText = msg;
+
+            const detailsBox = document.getElementById('error-details');
+            detailsBox.innerText = '请先完成答题验证后再访问此页面。';
+            detailsBox.style.display = 'block';
+
+            document.getElementById('error-modal').classList.add('active');
+            document.getElementById('main-content').style.display = 'none';
+            hideLoading();
+        }
+
+        function showDataError(msg) {
+            document.getElementById('error-title').innerText = '加载失败';
+            document.getElementById('error-message').innerText = '数据加载失败: ' + msg;
+            document.getElementById('error-details').style.display = 'none';
+            document.getElementById('error-modal').classList.add('active');
+            document.getElementById('main-content').style.display = 'none';
+            hideLoading();
+        }
+
+        function escapeHtml(text) {
+            if (!text) return text;
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        // 按钮事件绑定
+        document.getElementById('back-btn').addEventListener('click', () => {
+            localStorage.removeItem('access_token');
+            location.href = './index.html';
+        });
+
+        document.getElementById('reload-btn').addEventListener('click', () => {
+            location.reload();
+        });
+
+        // 启动
+        init();
+    </script>
+</body>
+</html>
