@@ -77,7 +77,7 @@
   },
   {
     "id": "q08",
-    "title": "解锁AT难度，一般需要达成什么条件？",
+    "title": "在Phigros中解锁AT难度，一般需要达成什么条件？",
     "options": [
       { "text": "任意难度来到92W分" },
       { "text": "IN难度达到92W分" },
@@ -88,7 +88,7 @@
   },
   {
     "id": "q09",
-    "title": "游戏内data货币的用途？",
+    "title": "在Phigros中游戏内data货币的用途？",
     "options": [
       { "text": "购买曲包" },
       { "text": "提升rks" },
@@ -99,7 +99,7 @@
   },
   {
     "id": "q10",
-    "title": "歌曲难度由易到难排序正确的是？",
+    "title": "在Phigros中歌曲难度由易到难排序正确的是？",
     "options": [
       { "text": "EZ＜IN＜HD＜AT" },
       { "text": "IN＜HD＜EZ＜AT" },
