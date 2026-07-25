@@ -3,6 +3,9 @@
     "img": "./jpg/1.jpg",
     "title": "Phigros官谱",
     "desc": "由Phigros拆包得来的官方谱面资源",
-    "url": "https://1812016671.share.123pan.cn/123pan/IBdrVv-ZlvMd"
+    "urls": [
+      { "url": "https://1812016671.share.123pan.cn/123pan/IBdrVv-ZlvMd", "text": "123云盘" },
+      { "url": "https://rl0.lanzouu.com/b0zkzf93i", "text": "蓝奏网盘（pwd=phi）" }
+    ]
   }
 ]
