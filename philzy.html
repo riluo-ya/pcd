@@ -323,6 +323,48 @@
             return (hash >>> 0).toString(16);
         }
 
+        // ================= 解密模块 (与答题系统完全一致) =================
+        function getCryptoPassword() {
+            const p1 = String.fromCharCode(114, 105);
+            const p2 = String.fromCharCode(108, 117, 111);
+            const p3 = String.fromCharCode(121, 97);
+            return p1 + p2 + p3;
+        }
+
+        // 检测运行环境
+        function checkEnvironment() {
+            const issues = [];
+            if (!window.crypto || !window.crypto.subtle) {
+                issues.push('Web Crypto API 不可用');
+            }
+            if (location.protocol === 'file:') {
+                issues.push('当前通过 file:// 协议打开，Web Crypto API 被浏览器禁用');
+            }
+            return issues;
+        }
+
+        async function decryptData(encryptedBase64, password) {
+            const encoder = new TextEncoder();
+            const data = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
+            
+            const salt = data.slice(0, 16);
+            const iv = data.slice(16, 28);
+            const ciphertext = data.slice(28);
+            
+            const keyMaterial = await crypto.subtle.importKey(
+                "raw", encoder.encode(password), "PBKDF2", false, ["deriveKey"]
+            );
+            const key = await crypto.subtle.deriveKey(
+                { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
+                keyMaterial, { name: "AES-GCM", length: 256 }, false, ["decrypt"]
+            );
+            
+            const decrypted = await crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: iv }, key, ciphertext
+            );
+            return new TextDecoder().decode(decrypted);
+        }
+
         // ================= 业务逻辑 =================
 
         async function verifyAccess() {
@@ -376,13 +418,32 @@
                 return;
             }
 
+            // --- 环境检测 ---
+            const envIssues = checkEnvironment();
+            if (envIssues.length > 0) {
+                showDataError('环境错误: ' + envIssues.join('; '));
+                return;
+            }
+
             try {
-                const response = await fetch('./philzy.json?t=' + Date.now());
-                if (!response.ok) throw new Error('网络请求失败');
-                const data = await response.json();
+                // 加载加密的 lz.data 并解密
+                const response = await fetch('./lz.data?t=' + Date.now());
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const encryptedBase64 = await response.text();
+                if (!encryptedBase64 || encryptedBase64.trim().length === 0) {
+                    throw new Error('lz.data 文件内容为空');
+                }
+
+                const decryptedText = await decryptData(encryptedBase64, getCryptoPassword());
+                const data = JSON.parse(decryptedText);
+
                 renderCards(data);
                 hideLoading();
             } catch (err) {
+                console.error('数据加载失败:', err);
                 showDataError(err.message);
             }
         }

@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>答题系统</title>
     <style>
-        /* 样式与之前完全一致，此处省略以节省篇幅 */
         :root {
             --primary: #4F46E5;
             --primary-hover: #4338CA;
@@ -31,6 +30,7 @@
         .spinner { width: 40px; height: 40px; border: 4px solid rgba(79, 70, 229, 0.3); border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .error-msg { text-align: center; color: var(--error-red); background: rgba(254, 242, 242, 0.95); padding: 20px; border-radius: 12px; box-shadow: var(--shadow-md); display: none; margin-top: 40px; }
+        .error-msg pre { text-align: left; background: #f3f4f6; padding: 10px; border-radius: 6px; font-size: 0.8rem; overflow-x: auto; }
         .locked-msg { text-align: center; background: var(--lock-bg); padding: 30px 20px; border-radius: 16px; box-shadow: var(--shadow-md); margin-top: 40px; }
         .locked-msg h2 { margin-top: 0; color: var(--error-red); font-size: 1.5rem; }
         .locked-msg p { font-size: 1rem; line-height: 1.6; color: #4b5563; margin-bottom: 10px; }
@@ -73,7 +73,8 @@
     <div id="error-display" class="container error-msg">
         <h3 style="margin-bottom: 10px;">系统异常</h3>
         <p id="error-main">无法加载页面</p>
-        <button class="retry-btn" onclick="location.reload()" style="padding:8px 16px; background:#374151; color:white; border:none; border-radius:4px; cursor:pointer;">重新加载</button>
+        <pre id="error-detail" style="display:none;"></pre>
+        <button class="retry-btn" onclick="location.reload()" style="padding:8px 16px; background:#374151; color:white; border:none; border-radius:4px; cursor:pointer; margin-top:10px;">重新加载</button>
     </div>
 
     <div id="locked-container" class="container" style="display: none;">
@@ -118,7 +119,7 @@
     </div>
 
     <script>
-        /* MD5 算法保持不变 (略，和之前完全相同) */
+        /* MD5 算法 */
         var MD5 = function (string) {
             function RotateLeft(lValue, iShiftBits) { return (lValue << iShiftBits) | (lValue >>> (32 - iShiftBits)); }
             function AddUnsigned(lX, lY) { var lX4, lY4, lX8, lY8, lResult; lX8 = (lX & 0x80000000); lY8 = (lY & 0x80000000); lX4 = (lX & 0x40000000); lY4 = (lY & 0x40000000); lResult = (lX & 0x3FFFFFFF) + (lY & 0x3FFFFFFF); if (lX4 & lY4) return (lResult ^ 0x80000000 ^ lX8 ^ lY8); if (lX4 | lY4) { if (lResult & 0x40000000) return (lResult ^ 0xC0000000 ^ lX8 ^ lY8); else return (lResult ^ 0x40000000 ^ lX8 ^ lY8); } else return (lResult ^ lX8 ^ lY8); }
@@ -141,16 +142,58 @@
 
     <script>
         // ================= 常量定义 =================
-        const SESSION_DURATION_MS = 5 * 60 * 1000; // 5分钟
-        const FREEZE_DURATION_MS = 10 * 60 * 1000;  // 10分钟
+        const SESSION_DURATION_MS = 5 * 60 * 1000;
+        const FREEZE_DURATION_MS = 10 * 60 * 1000;
         const MAX_FAILURES = 5;
         const TARGET_MD5 = MD5('riluoya');
-        const SESSION_INFO_KEY = 'current_session_info'; // 用于存储当前会话的种子和开始时间
-        const TOKEN_VALID_MS = 60 * 60 * 1000; // 1小时
+        const SESSION_INFO_KEY = 'current_session_info';
+        const TOKEN_VALID_MS = 60 * 60 * 1000;
 
         let sessionTimerInterval = null;
         let sessionStartTime = 0;
         let currentSessionSeed = '';
+
+        // ================= 题库解密模块 =================
+        function getCryptoPassword() {
+            const p1 = String.fromCharCode(114, 105);
+            const p2 = String.fromCharCode(108, 117, 111);
+            const p3 = String.fromCharCode(121, 97);
+            return p1 + p2 + p3;
+        }
+
+        // 检测运行环境
+        function checkEnvironment() {
+            const issues = [];
+            if (!window.crypto || !window.crypto.subtle) {
+                issues.push('Web Crypto API 不可用');
+            }
+            if (location.protocol === 'file:') {
+                issues.push('当前通过 file:// 协议打开，Web Crypto API 被浏览器禁用');
+            }
+            return issues;
+        }
+
+        async function decryptData(encryptedBase64, password) {
+            const encoder = new TextEncoder();
+            const data = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
+            
+            const salt = data.slice(0, 16);
+            const iv = data.slice(16, 28);
+            const ciphertext = data.slice(28);
+            
+            const keyMaterial = await crypto.subtle.importKey(
+                "raw", encoder.encode(password), "PBKDF2", false, ["deriveKey"]
+            );
+            const key = await crypto.subtle.deriveKey(
+                { name: "PBKDF2", salt: salt, iterations: 100000, hash: "SHA-256" },
+                keyMaterial, { name: "AES-GCM", length: 256 }, false, ["decrypt"]
+            );
+            
+            const decrypted = await crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: iv }, key, ciphertext
+            );
+            return new TextDecoder().decode(decrypted);
+        }
 
         // ================= 安全防护 =================
         (function() {
@@ -177,13 +220,11 @@
                 if (isNaN(ts)) return false;
                 const now = Date.now();
                 if (now - ts < TOKEN_VALID_MS) {
-                    // 有效，显示提示并跳转
                     showModal('提示', '您已通过验证，权限有效，即将跳转...', 2000, () => {
                         window.location.href = './home.html';
                     });
                     return true;
                 } else {
-                    // 过期，清除token
                     localStorage.removeItem('access_token');
                     return false;
                 }
@@ -198,14 +239,10 @@
         let userAnswers = {};
         let isSubmitting = false;
         let freezeTimerInterval = null;
-        let isPerformingAutoSwitch = false; // 防止自动切换重复触发
+        let isPerformingAutoSwitch = false;
 
         document.addEventListener('DOMContentLoaded', () => {
-            // 先检查Token是否有效，有效则跳转
-            if (checkTokenAndRedirect()) {
-                return; // 已处理跳转
-            }
-            // 否则正常进入答题流程
+            if (checkTokenAndRedirect()) return;
             checkFreezeStatus();
         });
 
@@ -278,38 +315,26 @@
             }
         };
 
-        // 获取或创建当前会话信息
         function getOrCreateSessionInfo() {
-            // 尝试从 localStorage 读取持久化的会话信息
             const stored = localStorage.getItem(SESSION_INFO_KEY);
             if (stored) {
                 try {
                     const info = JSON.parse(stored);
                     const elapsed = Date.now() - info.startTime;
-                    // 检查会话是否仍然有效（未超过5分钟）
                     if (elapsed < SESSION_DURATION_MS) {
-                        return {
-                            seed: info.seed,
-                            startTime: info.startTime
-                        };
+                        return { seed: info.seed, startTime: info.startTime };
                     }
                 } catch (e) {}
             }
-            // 如果没有有效会话，生成全新的（基于时间戳保证唯一）
             const newSeed = 'sess_' + Date.now();
             const newStartTime = Date.now();
-            // 存储新会话
             localStorage.setItem(SESSION_INFO_KEY, JSON.stringify({
                 seed: newSeed,
                 startTime: newStartTime
             }));
-            return {
-                seed: newSeed,
-                startTime: newStartTime
-            };
+            return { seed: newSeed, startTime: newStartTime };
         }
 
-        // 强制刷新会话（用于密码换题和自动到期换题）
         function forceNewSession() {
             if (!questionsData || questionsData.length === 0) {
                 showLoading(false);
@@ -317,7 +342,6 @@
                 return;
             }
 
-            // 生成全新会话信息
             const newSeed = 'sess_' + Date.now();
             const newStartTime = Date.now();
             localStorage.setItem(SESSION_INFO_KEY, JSON.stringify({
@@ -325,21 +349,17 @@
                 startTime: newStartTime
             }));
 
-            // 更新全局变量
             currentSessionSeed = newSeed;
             sessionStartTime = newStartTime;
 
-            // 生成新题目
             const newConfig = generateQuestionConfig(questionsData);
             currentQuestions = newConfig.questions.map(q => ({ ...q, renderedOptions: q.renderedOptions }));
             userAnswers = {};
 
-            // 缓存新题目
             try {
                 localStorage.setItem(newSeed, JSON.stringify(newConfig));
             } catch (e) {}
 
-            // 重新渲染界面
             renderQuestions();
             isSubmitting = false;
             const btn = document.getElementById('submit-btn');
@@ -348,14 +368,12 @@
                 btn.disabled = true;
             }
 
-            // 确保所有UI正确显示
             document.getElementById('quiz-container').style.display = 'block';
             document.getElementById('submit-area').style.display = 'flex';
             document.getElementById('session-info-bar').style.display = 'flex';
             document.getElementById('locked-container').style.display = 'none';
             document.getElementById('error-display').style.display = 'none';
 
-            // 重启倒计时
             if (sessionTimerInterval) clearInterval(sessionTimerInterval);
             updateSessionTimer();
             sessionTimerInterval = setInterval(updateSessionTimer, 1000);
@@ -367,32 +385,68 @@
 
         async function initQuiz() {
             try {
-                const response = await fetch('./timu.json?t=' + Date.now());
-                if (!response.ok) throw new Error(`HTTP 错误: ${response.status} ${response.statusText}`);
-                const text = await response.text();
+                // 1. 环境检测
+                const envIssues = checkEnvironment();
+                if (envIssues.length > 0) {
+                    throw new Error(
+                        "环境检测未通过：\n" + envIssues.join('\n') +
+                        "\n\n解决方案：请通过本地服务器访问此页面，例如：\n" +
+                        "• VS Code 安装 Live Server 插件，右键 index.html → Open with Live Server\n" +
+                        "• 或命令行运行: npx serve .\n" +
+                        "• 或 Python: python -m http.server 8080\n\n" +
+                        "然后访问 http://localhost:8080 而不是直接双击打开文件。"
+                    );
+                }
+
+                // 2. 加载加密文件
+                let response;
                 try {
-                    questionsData = JSON.parse(text);
+                    response = await fetch('./pcd.data?t=' + Date.now());
+                } catch (fetchErr) {
+                    throw new Error("网络请求失败: " + fetchErr.message + "\n请确认 pcd.data 文件与答题页在同一目录。");
+                }
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP 错误: ${response.status} ${response.statusText}\n请确认 pcd.data 文件存在且路径正确。`);
+                }
+
+                const encryptedBase64 = await response.text();
+                if (!encryptedBase64 || encryptedBase64.trim().length === 0) {
+                    throw new Error("pcd.data 文件内容为空");
+                }
+
+                // 3. 解密
+                let decryptedText;
+                try {
+                    decryptedText = await decryptData(encryptedBase64, getCryptoPassword());
+                } catch (decErr) {
+                    throw new Error("题库解密失败，密码可能不匹配或文件损坏。\n错误详情: " + decErr.message);
+                }
+
+                // 4. JSON 解析
+                try {
+                    questionsData = JSON.parse(decryptedText);
                 } catch (parseErr) {
                     throw new Error("JSON 格式解析失败: " + parseErr.message);
                 }
+                
                 if (!Array.isArray(questionsData)) {
                     throw new Error("题库数据格式错误: 期望是一个数组");
                 }
+
                 loadAndRender();
             } catch (error) {
-                console.error(error);
+                console.error('initQuiz 错误:', error);
                 showLoading(false);
                 showError('加载失败', error.message);
             }
         }
 
         function loadAndRender() {
-            // 获取当前有效的会话信息（优先使用存储的会话）
             const sessionInfo = getOrCreateSessionInfo();
             currentSessionSeed = sessionInfo.seed;
             sessionStartTime = sessionInfo.startTime;
 
-            // 尝试加载该种子对应的题目缓存
             let cachedConfig = null;
             try {
                 const cachedStr = localStorage.getItem(sessionInfo.seed);
@@ -435,14 +489,11 @@
 
             if (el) {
                 if (remaining <= 0) {
-                    // 倒计时结束，自动切换题目
                     if (!isPerformingAutoSwitch) {
                         isPerformingAutoSwitch = true;
-                        // 防止定时器多次触发
                         if (sessionTimerInterval) clearInterval(sessionTimerInterval);
                         el.innerText = "正在切换...";
                         el.style.color = "#6b7280";
-                        // 短暂延迟后执行换题
                         setTimeout(() => {
                             forceNewSession();
                             isPerformingAutoSwitch = false;
@@ -615,6 +666,11 @@
 
         function showError(mainMsg, detailMsg) {
             document.getElementById('error-main').innerText = mainMsg;
+            const detailEl = document.getElementById('error-detail');
+            if (detailEl) {
+                detailEl.innerText = detailMsg;
+                detailEl.style.display = 'block';
+            }
             document.getElementById('error-display').style.display = 'block';
             document.getElementById('quiz-container').style.display = 'none';
             document.getElementById('submit-area').style.display = 'none';
