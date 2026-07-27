@@ -182,5 +182,16 @@
       { "text": "114514" }
     ],
     "answerText": "1000000"
+  },
+  {
+    "id": "q17",
+    "title": "在Phigros社区游戏Phira中，以下那个不是Phira的官方下载渠道？",
+    "options": [
+      { "text": "Github" },
+      { "text": "好游快爆" },
+      { "text": "TapTap" },
+      { "text": "App Store" }
+    ],
+    "answerText": "TapTap"
   }
 ]
