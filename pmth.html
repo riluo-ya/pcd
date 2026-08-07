@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Phigros Chart Studio | 谱面工坊</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js">
-    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         :root {
             --bg-0: #07070a;
@@ -25,801 +24,192 @@
             --shadow: 0 8px 32px rgba(0,0,0,0.4);
             --radius: 14px;
         }
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
-        html,body {
-            height: 100%;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
-            background: var(--bg-0);
-            color: var(--text);
-            overflow-x: hidden;
-        }
-        .ambient {
-            position: fixed;
-            inset: 0;
-            z-index: -1;
-            pointer-events: none;
-            background: radial-gradient(1200px 600px at 10% -10%, rgba(124,108,240,0.12), transparent), radial-gradient(800px 400px at 90% 110%, rgba(94,234,212,0.08), transparent);
-        }
-        .wrap {
-            max-width: 1100px;
-            margin: 0 auto;
-            padding: 32px 20px 60px;
-        }
-        .brand {
-            text-align: center;
-            margin-bottom: 32px;
-            animation: fadeDown .7s ease both;
-        }
-        .brand h1 {
-            font-size: clamp(1.6rem, 5vw, 2.2rem);
-            font-weight: 800;
-            letter-spacing: -0.5px;
-            background: linear-gradient(135deg, #a78bfa, #60c8ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .brand p {
-            color: var(--text-2);
-            font-size: .95rem;
-            margin-top: 6px;
-        }
+        * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+        html,body { height:100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg-0); color: var(--text); overflow-x: hidden; }
+        .ambient { position:fixed; inset:0; z-index:-1; pointer-events:none; background: radial-gradient(1200px 600px at 10% -10%, rgba(124,108,240,0.12), transparent), radial-gradient(800px 400px at 90% 110%, rgba(94,234,212,0.08), transparent); }
+        .wrap { max-width:1100px; margin:0 auto; padding:32px 20px 60px; }
+        .brand { text-align:center; margin-bottom:32px; animation: fadeDown .7s ease both; }
+        .brand h1 { font-size: clamp(1.6rem, 5vw, 2.2rem); font-weight:800; letter-spacing:-0.5px; background: linear-gradient(135deg, #a78bfa, #60c8ff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+        .brand p { color:var(--text-2); font-size:.95rem; margin-top:6px; }
 
-        /* 加载遮罩 */
         #loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(7,7,10,0.92);
-            backdrop-filter: blur(16px);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-            transition: opacity 0.3s ease;
+            position: fixed; top:0; left:0; right:0; bottom:0;
+            background: rgba(7,7,10,0.92); backdrop-filter: blur(16px);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 9999; transition: opacity 0.3s ease;
         }
         .spinner {
-            width: 40px;
-            height: 40px;
+            width: 40px; height: 40px;
             border: 4px solid rgba(124,108,240,0.3);
             border-top: 4px solid var(--accent);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
+            border-radius: 50%; animation: spin 1s linear infinite;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* 错误弹窗（暗色匹配） */
         .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(7,7,10,0.85);
-            backdrop-filter: blur(12px);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 10000;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s ease;
-            padding: 20px;
+            position: fixed; top:0; left:0; right:0; bottom:0;
+            background: rgba(7,7,10,0.85); backdrop-filter: blur(12px);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 10000; opacity: 0; visibility: hidden;
+            transition: all 0.3s ease; padding: 20px;
         }
-        .modal-overlay.active {
-            opacity: 1;
-            visibility: visible;
-        }
+        .modal-overlay.active { opacity: 1; visibility: visible; }
         .modal-content {
-            background: var(--bg-1);
-            padding: 30px;
-            border-radius: var(--radius);
-            text-align: center;
-            max-width: 360px;
-            width: 100%;
-            border: 1px solid var(--border);
-            box-shadow: var(--shadow);
-            transform: scale(0.9);
-            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            background: var(--bg-1); padding: 30px; border-radius: var(--radius);
+            text-align: center; max-width: 360px; width: 100%;
+            border: 1px solid var(--border); box-shadow: var(--shadow);
+            transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-        .modal-overlay.active .modal-content {
-            transform: scale(1);
-        }
-        .modal-title {
-            font-size: 1.25rem;
-            font-weight: 700;
-            margin-bottom: 12px;
-            color: var(--flick);
-        }
-        .modal-msg {
-            color: var(--text-2);
-            margin-bottom: 24px;
-            line-height: 1.5;
-            white-space: pre-wrap;
-            font-size: 0.95rem;
-        }
-        .modal-btn-group {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-top: 15px;
-        }
-        .btn-primary {
-            padding: 10px 24px;
-            background: linear-gradient(135deg, var(--accent), var(--accent-2));
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 0.9rem;
-            transition: 0.2s;
-        }
-        .btn-primary:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 8px 20px rgba(124,108,240,0.3);
-        }
-        .btn-secondary {
-            padding: 10px 24px;
-            background: var(--bg-2);
-            color: var(--text);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 500;
-            font-size: 0.9rem;
-            transition: 0.2s;
-        }
-        .btn-secondary:hover {
-            border-color: var(--border-hover);
-            background: var(--bg-3);
-        }
-        .error-details {
-            background: var(--bg-2);
-            padding: 12px;
-            border-radius: 8px;
-            margin: 15px 0 0 0;
-            font-size: 0.85rem;
-            color: var(--text-2);
-            text-align: left;
-            word-break: break-all;
-            display: none;
-        }
+        .modal-overlay.active .modal-content { transform: scale(1); }
+        .modal-title { font-size: 1.25rem; font-weight: 700; margin-bottom: 12px; color: var(--flick); }
+        .modal-msg { color: var(--text-2); margin-bottom: 24px; line-height: 1.5; white-space: pre-wrap; font-size: 0.95rem; }
+        .modal-btn-group { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 15px; }
+        .btn-primary { padding: 10px 24px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.9rem; transition: 0.2s; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(124,108,240,0.3); }
+        .btn-secondary { padding: 10px 24px; background: var(--bg-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 0.9rem; transition: 0.2s; }
+        .btn-secondary:hover { border-color: var(--border-hover); background: var(--bg-3); }
+        .error-details { background: var(--bg-2); padding: 12px; border-radius: 8px; margin: 15px 0 0 0; font-size: 0.85rem; color: var(--text-2); text-align: left; word-break: break-all; display: none; }
 
-        /* 其余原有样式保持不变 */
         .uploader {
-            position: relative;
-            border: 2px dashed var(--border);
-            border-radius: var(--radius);
-            padding: 48px 24px;
-            text-align: center;
-            background: var(--bg-3);
-            transition: .3s ease;
-            cursor: pointer;
-            overflow: hidden;
-            animation: fadeUp .7s .1s ease both;
-            user-select: none;
+            position:relative; border:2px dashed var(--border); border-radius:var(--radius); padding:48px 24px;
+            text-align:center; background:var(--bg-3); transition:.3s ease; cursor:pointer; overflow:hidden;
+            animation: fadeUp .7s .1s ease both; user-select:none;
         }
-        .uploader:hover, .uploader.drag-active {
-            border-color: var(--accent);
-            background: rgba(124,108,240,0.06);
-            transform: translateY(-2px);
-        }
-        .uploader input[type="file"] {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            opacity: 0;
-            cursor: pointer;
-            z-index: 2;
-            font-size: 100px;
-        }
-        .uploader-icon {
-            font-size: 2.6rem;
-            margin-bottom: 10px;
-            opacity: .9;
-            pointer-events: none;
-        }
-        .uploader h3 {
-            font-size: 1.1rem;
-            font-weight: 600;
-            pointer-events: none;
-        }
-        .uploader span {
-            color: var(--text-2);
-            font-size: .85rem;
-            display: block;
-            margin-top: 6px;
-            pointer-events: none;
-        }
+        .uploader:hover, .uploader.drag-active { border-color:var(--accent); background:rgba(124,108,240,0.06); transform:translateY(-2px); }
+        .uploader input[type="file"] { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; z-index:2; font-size:100px; }
+        .uploader-icon { font-size:2.6rem; margin-bottom:10px; opacity:.9; pointer-events:none; }
+        .uploader h3 { font-size:1.1rem; font-weight:600; pointer-events:none; }
+        .uploader span { color:var(--text-2); font-size:.85rem; display:block; margin-top:6px; pointer-events:none; }
         .file-chip {
-            display: none;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            margin-top: 14px;
-            padding: 8px 18px;
-            background: rgba(94,234,212,0.08);
-            border: 1px solid rgba(94,234,212,0.2);
-            color: var(--hold);
-            border-radius: 100px;
-            font-size: .85rem;
-            font-weight: 600;
-            width: fit-content;
-            margin-left: auto;
-            margin-right: auto;
-            pointer-events: none;
+            display:none; align-items:center; justify-content:center; gap:8px; margin-top:14px;
+            padding:8px 18px; background:rgba(94,234,212,0.08); border:1px solid rgba(94,234,212,0.2);
+            color:var(--hold); border-radius:100px; font-size:.85rem; font-weight:600; width:fit-content;
+            margin-left:auto; margin-right:auto; pointer-events:none;
         }
-        .file-chip.show {
-            display: inline-flex;
-        }
-        .workspace {
-            display: none;
-            margin-top: 24px;
-            gap: 20px;
-            flex-direction: column;
-            animation: fadeUp .6s ease both;
-        }
-        .workspace.active {
-            display: flex;
-        }
-        .row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        @media (max-width:780px) {
-            .row {
-                grid-template-columns: 1fr;
-            }
-        }
-        .card {
-            background: var(--bg-1);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 24px;
-            box-shadow: var(--shadow);
-            transition: .3s ease;
-        }
-        .card:hover {
-            border-color: var(--border-hover);
-        }
-        .card-head {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 18px;
-            font-weight: 700;
-            font-size: 1.05rem;
-        }
-        .card-head .dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            box-shadow: 0 0 8px currentColor;
-        }
-        .stat-grid {
-            display: grid;
-            grid-template-columns: repeat(2,1fr);
-            gap: 12px;
-        }
+        .file-chip.show { display:inline-flex; }
+        .workspace { display:none; margin-top:24px; gap:20px; flex-direction:column; animation: fadeUp .6s ease both; }
+        .workspace.active { display:flex; }
+        .row { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+        @media (max-width:780px) { .row { grid-template-columns:1fr; } }
+        .card { background:var(--bg-1); border:1px solid var(--border); border-radius:var(--radius); padding:24px; box-shadow:var(--shadow); transition:.3s ease; }
+        .card:hover { border-color:var(--border-hover); }
+        .card-head { display:flex; align-items:center; gap:10px; margin-bottom:18px; font-weight:700; font-size:1.05rem; }
+        .card-head .dot { width:10px; height:10px; border-radius:50%; box-shadow:0 0 8px currentColor; }
+        .stat-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
         .stat-cell {
-            position: relative;
-            background: var(--bg-0);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 16px 12px;
-            text-align: center;
-            transition: .25s ease;
+            position:relative; background:var(--bg-0); border:1px solid var(--border); border-radius:12px;
+            padding:16px 12px; text-align:center; transition:.25s ease;
         }
-        .stat-cell:hover {
-            transform: translateY(-2px);
-            border-color: var(--border-hover);
-        }
-        .stat-cell::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 10%;
-            right: 10%;
-            height: 3px;
-            border-radius: 3px 3px 0 0;
-            opacity: .7;
-        }
-        .stat-cell.tap::after {
-            background: var(--tap);
-            box-shadow: 0 0 8px var(--tap);
-        }
-        .stat-cell.drag::after {
-            background: var(--drag);
-            box-shadow: 0 0 8px var(--drag);
-        }
-        .stat-cell.flick::after {
-            background: var(--flick);
-            box-shadow: 0 0 8px var(--flick);
-        }
-        .stat-cell.hold::after {
-            background: var(--hold);
-            box-shadow: 0 0 8px var(--hold);
-        }
-        .stat-num {
-            font-size: 1.8rem;
-            font-weight: 800;
-            line-height: 1;
-            margin-bottom: 6px;
-        }
-        .stat-cell.tap .stat-num {
-            color: var(--tap);
-        }
-        .stat-cell.drag .stat-num {
-            color: var(--drag);
-        }
-        .stat-cell.flick .stat-num {
-            color: var(--flick);
-        }
-        .stat-cell.hold .stat-num {
-            color: var(--hold);
-        }
-        .stat-label {
-            font-size: .8rem;
-            color: var(--text-2);
-        }
-        .stat-pct {
-            font-size: .75rem;
-            opacity: .7;
-            margin-top: 2px;
-            font-weight: 600;
-        }
+        .stat-cell:hover { transform:translateY(-2px); border-color:var(--border-hover); }
+        .stat-cell::after { content:''; position:absolute; bottom:0; left:10%; right:10%; height:3px; border-radius:3px 3px 0 0; opacity:.7; }
+        .stat-cell.tap::after { background:var(--tap); box-shadow:0 0 8px var(--tap); }
+        .stat-cell.drag::after { background:var(--drag); box-shadow:0 0 8px var(--drag); }
+        .stat-cell.flick::after { background:var(--flick); box-shadow:0 0 8px var(--flick); }
+        .stat-cell.hold::after { background:var(--hold); box-shadow:0 0 8px var(--hold); }
+        .stat-num { font-size:1.8rem; font-weight:800; line-height:1; margin-bottom:6px; }
+        .stat-cell.tap .stat-num { color:var(--tap); }
+        .stat-cell.drag .stat-num { color:var(--drag); }
+        .stat-cell.flick .stat-num { color:var(--flick); }
+        .stat-cell.hold .stat-num { color:var(--hold); }
+        .stat-label { font-size:.8rem; color:var(--text-2); }
+        .stat-pct { font-size:.75rem; opacity:.7; margin-top:2px; font-weight:600; }
         .total-pill {
-            margin-top: 16px;
-            padding: 18px;
-            border-radius: 12px;
-            text-align: center;
-            background: linear-gradient(135deg, rgba(124,108,240,0.12), rgba(167,139,250,0.08));
-            border: 1px solid rgba(124,108,240,0.2);
+            margin-top:16px; padding:18px; border-radius:12px; text-align:center;
+            background:linear-gradient(135deg, rgba(124,108,240,0.12), rgba(167,139,250,0.08)); border:1px solid rgba(124,108,240,0.2);
         }
-        .total-pill .n {
-            font-size: 2.2rem;
-            font-weight: 900;
-            background: linear-gradient(135deg, #a78bfa, #60c8ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .total-pill .l {
-            font-size: .85rem;
-            color: var(--text-2);
-            margin-top: 2px;
-        }
-        .dist-track {
-            margin-top: 14px;
-            height: 6px;
-            background: var(--bg-0);
-            border-radius: 100px;
-            overflow: hidden;
-            display: flex;
-        }
-        .dist-fill {
-            height: 100%;
-            transition: width .8s cubic-bezier(.22,1,.36,1);
-        }
-        .mini-canvas-wrap {
-            margin-top: 14px;
-            height: 130px;
-            background: var(--bg-0);
-            border-radius: 10px;
-            overflow: hidden;
-            position: relative;
-            cursor: pointer;
-        }
-        .mini-canvas-wrap canvas {
-            width: 100%;
-            height: 100%;
-            display: block;
-        }
-        .mini-canvas-wrap .cap {
-            position: absolute;
-            top: 8px;
-            left: 10px;
-            font-size: .7rem;
-            color: var(--text-2);
-            background: rgba(0,0,0,.4);
-            padding: 2px 8px;
-            border-radius: 4px;
-            pointer-events: none;
-        }
-        .dynamic-rules {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-bottom: 14px;
-        }
-        .rule-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: var(--bg-0);
-            padding: 10px 12px;
-            border-radius: 10px;
-        }
-        .rule-row select {
-            background: var(--bg-2);
-            color: var(--text);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 8px 10px;
-            font-size: .85rem;
-            outline: none;
-            cursor: pointer;
-            flex: 1;
-        }
-        .rule-row select option {
-            background: var(--bg-2);
-        }
-        .rule-row .arrow {
-            color: var(--text-2);
-            font-weight: 700;
-        }
-        .rule-row .del-btn {
-            background: none;
-            border: 1px solid var(--border);
-            color: var(--flick);
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 1.1rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: .2s;
-        }
-        .rule-row .del-btn:hover {
-            background: rgba(255,107,107,0.15);
-            border-color: var(--flick);
-        }
-        .add-rule-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            width: 100%;
-            padding: 12px;
-            background: var(--bg-3);
-            border: 1px dashed var(--border);
-            color: var(--accent);
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: 700;
-            transition: .2s;
-        }
-        .add-rule-btn:hover {
-            border-color: var(--accent);
-            background: rgba(124,108,240,0.05);
-        }
-        .field {
-            margin-top: 14px;
-            padding: 12px 14px;
-            background: var(--bg-0);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .field label {
-            font-size: .9rem;
-            flex-shrink: 0;
-            color: var(--text-2);
-        }
-        .field select {
-            flex: 1;
-            background: transparent;
-            color: var(--text);
-            border: none;
-            outline: none;
-            font-size: .9rem;
-            cursor: pointer;
-        }
-        .field select option {
-            background: var(--bg-2);
-            color: var(--text);
-        }
-        .shield {
-            margin-top: 12px;
-            padding: 14px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: rgba(255,107,107,.06);
-            border: 1px solid rgba(255,107,107,.15);
-            cursor: pointer;
-            transition: .2s;
-            user-select: none;
-        }
-        .shield:hover {
-            background: rgba(255,107,107,.1);
-            border-color: rgba(255,107,107,.25);
-        }
-        .shield input {
-            width: 20px;
-            height: 20px;
-            accent-color: var(--flick);
-            flex-shrink: 0;
-            cursor: pointer;
-        }
-        .shield .t {
-            font-weight: 700;
-            font-size: .9rem;
-            color: var(--flick);
-        }
-        .shield .d {
-            font-size: .8rem;
-            color: var(--text-2);
-            margin-top: 2px;
-        }
-        .feat-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-        }
+        .total-pill .n { font-size:2.2rem; font-weight:900; background:linear-gradient(135deg, #a78bfa, #60c8ff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+        .total-pill .l { font-size:.85rem; color:var(--text-2); margin-top:2px; }
+        .dist-track { margin-top:14px; height:6px; background:var(--bg-0); border-radius:100px; overflow:hidden; display:flex; }
+        .dist-fill { height:100%; transition:width .8s cubic-bezier(.22,1,.36,1); }
+        .mini-canvas-wrap { margin-top:14px; height:130px; background:var(--bg-0); border-radius:10px; overflow:hidden; position:relative; cursor:pointer; }
+        .mini-canvas-wrap canvas { width:100%; height:100%; display:block; }
+        .mini-canvas-wrap .cap { position:absolute; top:8px; left:10px; font-size:.7rem; color:var(--text-2); background:rgba(0,0,0,.4); padding:2px 8px; border-radius:4px; pointer-events:none; }
+        .dynamic-rules { display:flex; flex-direction:column; gap:10px; margin-bottom:14px; }
+        .rule-row { display:flex; align-items:center; gap:8px; background:var(--bg-0); padding:10px 12px; border-radius:10px; }
+        .rule-row select { background:var(--bg-2); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px 10px; font-size:.85rem; outline:none; cursor:pointer; flex:1; }
+        .rule-row select option { background:var(--bg-2); }
+        .rule-row .arrow { color:var(--text-2); font-weight:700; }
+        .rule-row .del-btn { background:none; border:1px solid var(--border); color:var(--flick); width:32px; height:32px; border-radius:6px; cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; transition:.2s; }
+        .rule-row .del-btn:hover { background:rgba(255,107,107,0.15); border-color:var(--flick); }
+        .add-rule-btn { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; padding:12px; background:var(--bg-3); border:1px dashed var(--border); color:var(--accent); border-radius:10px; cursor:pointer; font-weight:700; transition:.2s; }
+        .add-rule-btn:hover { border-color:var(--accent); background:rgba(124,108,240,0.05); }
+        .field { margin-top:14px; padding:12px 14px; background:var(--bg-0); border-radius:10px; display:flex; align-items:center; gap:10px; }
+        .field label { font-size:.9rem; flex-shrink:0; color:var(--text-2); }
+        .field select { flex:1; background:transparent; color:var(--text); border:none; outline:none; font-size:.9rem; cursor:pointer; }
+        .field select option { background:var(--bg-2); color:var(--text); }
+        .shield { margin-top:12px; padding:14px; border-radius:10px; display:flex; align-items:center; gap:12px; background:rgba(255,107,107,.06); border:1px solid rgba(255,107,107,.15); cursor:pointer; transition:.2s; user-select:none; }
+        .shield:hover { background:rgba(255,107,107,.1); border-color:rgba(255,107,107,.25); }
+        .shield input { width:20px; height:20px; accent-color:var(--flick); flex-shrink:0; cursor:pointer; }
+        .shield .t { font-weight:700; font-size:.9rem; color:var(--flick); }
+        .shield .d { font-size:.8rem; color:var(--text-2); margin-top:2px; }
+        .feat-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
         .feat-btn {
-            padding: 14px 10px;
-            background: var(--bg-0);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            color: var(--text);
-            font-size: .88rem;
-            cursor: pointer;
-            transition: .2s;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 6px;
-            user-select: none;
+            padding:14px 10px; background:var(--bg-0); border:1px solid var(--border); border-radius:10px;
+            color:var(--text); font-size:.88rem; cursor:pointer; transition:.2s;
+            display:flex; flex-direction:column; align-items:center; gap:6px; user-select:none;
         }
-        .feat-btn:hover {
-            border-color: var(--border-hover);
-            background: rgba(255,255,255,.03);
-            transform: translateY(-1px);
-        }
-        .feat-btn.active {
-            border-color: var(--accent);
-            background: rgba(124,108,240,.1);
-            box-shadow: 0 0 20px rgba(124,108,240,.15);
-        }
-        .feat-btn .em {
-            font-size: 1.4rem;
-            line-height: 1;
-        }
-        .actions {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            margin-top: 4px;
-        }
-        .btn {
-            flex: 1;
-            min-width: 160px;
-            padding: 14px 20px;
-            border-radius: 12px;
-            border: none;
-            font-size: .95rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: .25s;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            user-select: none;
-        }
-        .btn-prim {
-            background: linear-gradient(135deg, #7c6cf0, #a78bfa);
-            color: #fff;
-            box-shadow: 0 10px 30px rgba(124,108,240,.35);
-        }
-        .btn-prim:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 14px 40px rgba(124,108,240,.45);
-        }
-        .btn-prim:disabled {
-            opacity: .5;
-            cursor: not-allowed;
-        }
-        .btn-sec {
-            background: var(--bg-2);
-            color: var(--text);
-            border: 1px solid var(--border);
-        }
-        .btn-sec:hover {
-            border-color: var(--border-hover);
-            background: var(--bg-3);
-        }
+        .feat-btn:hover { border-color:var(--border-hover); background:rgba(255,255,255,.03); transform:translateY(-1px); }
+        .feat-btn.active { border-color:var(--accent); background:rgba(124,108,240,.1); box-shadow:0 0 20px rgba(124,108,240,.15); }
+        .feat-btn .em { font-size:1.4rem; line-height:1; }
+        .actions { display:flex; gap:12px; flex-wrap:wrap; margin-top:4px; }
+        .btn { flex:1; min-width:160px; padding:14px 20px; border-radius:12px; border:none; font-size:.95rem; font-weight:700; cursor:pointer; transition:.25s; display:inline-flex; align-items:center; justify-content:center; gap:8px; user-select:none; }
+        .btn-prim { background:linear-gradient(135deg, #7c6cf0, #a78bfa); color:#fff; box-shadow:0 10px 30px rgba(124,108,240,.35); }
+        .btn-prim:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 14px 40px rgba(124,108,240,.45); }
+        .btn-prim:disabled { opacity:.5; cursor:not-allowed; }
+        .btn-sec { background:var(--bg-2); color:var(--text); border:1px solid var(--border); }
+        .btn-sec:hover { border-color:var(--border-hover); background:var(--bg-3); }
         .overlay {
-            position: fixed;
-            inset: 0;
-            z-index: 100;
-            background: rgba(7,7,10,.85);
-            backdrop-filter: blur(12px);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transition: opacity .3s ease;
+            position:fixed; inset:0; z-index:100; background:rgba(7,7,10,.85); backdrop-filter:blur(12px);
+            display:none; align-items:center; justify-content:center; opacity:0; transition:opacity .3s ease;
         }
-        .overlay.on {
-            display: flex;
-            opacity: 1;
-        }
+        .overlay.on { display:flex; opacity:1; }
         .modal {
-            width: min(90%,420px);
-            background: var(--bg-1);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 36px 28px;
-            text-align: center;
-            box-shadow: var(--shadow);
-            transform: scale(.96);
-            transition: transform .3s ease;
+            width:min(90%,420px); background:var(--bg-1); border:1px solid var(--border); border-radius:var(--radius);
+            padding:36px 28px; text-align:center; box-shadow:var(--shadow); transform:scale(.96); transition:transform .3s ease;
         }
-        .overlay.on .modal {
-            transform: scale(1);
-        }
-        .modal .pct {
-            font-size: 2.6rem;
-            font-weight: 900;
-            background: linear-gradient(135deg, #a78bfa, #60c8ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            line-height: 1;
-            margin-bottom: 6px;
-        }
-        .modal .status {
-            color: var(--text-2);
-            font-size: .95rem;
-            margin-bottom: 24px;
-        }
-        .track {
-            height: 8px;
-            background: var(--bg-0);
-            border-radius: 100px;
-            overflow: hidden;
-            margin-bottom: 10px;
-        }
-        .bar {
-            height: 100%;
-            width: 0%;
-            border-radius: 100px;
-            background: linear-gradient(90deg, #7c6cf0, #60c8ff);
-            transition: width .25s ease;
-            position: relative;
-            overflow: hidden;
-        }
-        .bar::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
-            animation: shimmer 1.4s infinite;
-        }
-        .modal .detail {
-            font-size: .85rem;
-            color: var(--text-2);
-            margin-top: 4px;
-        }
+        .overlay.on .modal { transform:scale(1); }
+        .modal .pct { font-size:2.6rem; font-weight:900; background:linear-gradient(135deg, #a78bfa, #60c8ff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; line-height:1; margin-bottom:6px; }
+        .modal .status { color:var(--text-2); font-size:.95rem; margin-bottom:24px; }
+        .track { height:8px; background:var(--bg-0); border-radius:100px; overflow:hidden; margin-bottom:10px; }
+        .bar { height:100%; width:0%; border-radius:100px; background:linear-gradient(90deg, #7c6cf0, #60c8ff); transition:width .25s ease; position:relative; overflow:hidden; }
+        .bar::after { content:''; position:absolute; inset:0; background:linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent); animation:shimmer 1.4s infinite; }
+        .modal .detail { font-size:.85rem; color:var(--text-2); margin-top:4px; }
         .canvas-overlay {
-            position: fixed;
-            inset: 0;
-            z-index: 150;
-            background: rgba(7,7,10,0.95);
-            backdrop-filter: blur(20px);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
+            position:fixed; inset:0; z-index:150; background:rgba(7,7,10,0.95); backdrop-filter:blur(20px);
+            display:none; align-items:center; justify-content:center; flex-direction:column;
         }
-        .canvas-overlay.on {
-            display: flex;
-        }
+        .canvas-overlay.on { display:flex; }
         .canvas-overlay .close-btn {
-            position: absolute;
-            top: 24px;
-            right: 24px;
-            background: var(--bg-1);
-            border: 1px solid var(--border);
-            color: var(--text);
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            cursor: pointer;
-            font-size: 1.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: .2s;
-            z-index: 10;
+            position:absolute; top:24px; right:24px; background:var(--bg-1); border:1px solid var(--border);
+            color:var(--text); width:48px; height:48px; border-radius:50%; cursor:pointer; font-size:1.5rem;
+            display:flex; align-items:center; justify-content:center; transition:.2s; z-index:10;
         }
-        .canvas-overlay .close-btn:hover {
-            background: var(--bg-2);
-            border-color: var(--border-hover);
-        }
-        .canvas-overlay canvas {
-            width: 95%;
-            height: 80%;
-            border-radius: 12px;
-            background: var(--bg-0);
-        }
+        .canvas-overlay .close-btn:hover { background:var(--bg-2); border-color:var(--border-hover); }
+        .canvas-overlay canvas { width:95%; height:80%; border-radius:12px; background:var(--bg-0); }
         .toast {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            z-index: 200;
-            background: var(--bg-1);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 14px 18px;
-            box-shadow: var(--shadow);
-            display: none;
-            align-items: center;
-            gap: 12px;
-            max-width: 360px;
-            animation: slideIn .35s ease both;
+            position:fixed; bottom:24px; right:24px; z-index:200; background:var(--bg-1); border:1px solid var(--border);
+            border-radius:12px; padding:14px 18px; box-shadow:var(--shadow); display:none; align-items:center;
+            gap:12px; max-width:360px; animation:slideIn .35s ease both;
         }
-        .toast.on {
-            display: flex;
-        }
-        .toast .icon {
-            font-size: 1.3rem;
-            flex-shrink: 0;
-        }
-        .toast .body {
-            flex: 1;
-        }
-        .toast .title {
-            font-weight: 700;
-            font-size: .92rem;
-        }
-        .toast .msg {
-            font-size: .85rem;
-            color: var(--text-2);
-            margin-top: 1px;
-        }
-        @keyframes fadeDown {
-            from { opacity: 0; transform: translateY(-16px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(16px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-        }
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateX(40px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
+        .toast.on { display:flex; }
+        .toast .icon { font-size:1.3rem; flex-shrink:0; }
+        .toast .body { flex:1; }
+        .toast .title { font-weight:700; font-size:.92rem; }
+        .toast .msg { font-size:.85rem; color:var(--text-2); margin-top:1px; }
+
+        /* 禁用样式 */
+        select:disabled, button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .add-rule-btn:disabled { opacity: 0.4; pointer-events: none; }
+
+        @keyframes fadeDown { from { opacity:0; transform:translateY(-16px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes shimmer { 0% { transform:translateX(-100%); } 100% { transform:translateX(100%); } }
+        @keyframes slideIn { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }
     </style>
 </head>
 <body>
-    <!-- 安全验证加载层 -->
-    <div id="loading-overlay">
-        <div class="spinner"></div>
-    </div>
+    <div id="loading-overlay"><div class="spinner"></div></div>
 
-    <!-- 验证失败弹窗 -->
     <div id="error-modal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-title" id="error-title">访问受限</div>
@@ -832,7 +222,6 @@
         </div>
     </div>
 
-    <!-- 页面原有内容 -->
     <div class="ambient"></div>
     <div class="wrap" id="main-content" style="display: none;">
         <header class="brand">
@@ -887,17 +276,29 @@
                         <option value="4">全部转为 Flick</option>
                         <option value="3">全部转为 Hold</option>
                     </select></div>
-                    <label class="shield"><input type="checkbox" id="shieldHold"><div><div class="t">🛡️ 屏蔽长条 (Hold)</div><div class="d">长条将不参与任何替换或删除操作</div></div></label>
+                    <label class="shield">
+                        <input type="checkbox" id="shieldHold">
+                        <div>
+                            <div class="t">🛡️ 屏蔽长条 (Hold)</div>
+                            <div class="d">常规替换时保留 Hold 不变</div>
+                        </div>
+                    </label>
                 </div>
             </div>
             <div class="row">
                 <div class="card">
                     <div class="card-head"><div class="dot" style="background:var(--hold);color:var(--hold)"></div>高级功能</div>
                     <div class="feat-grid">
-                        <button class="feat-btn" data-feat="delFlick"><span class="em">🗑️</span><span>删除所有红键</span></button>
-                        <button class="feat-btn" data-feat="delDrag"><span class="em">🗑️</span><span>删除所有黄键</span></button>
-                        <button class="feat-btn" data-feat="mirrorX"><span class="em">↔️</span><span>X 轴镜像</span></button>
-                        <button class="feat-btn" data-feat="randX"><span class="em">🎲</span><span>随机偏移 X</span></button>
+                        <button class="feat-btn" data-feat="random"><span class="em">🎲</span><span>随机</span></button>
+                    </div>
+                    <div id="randomShieldWrap" style="display:none; margin-top:12px;">
+                        <label class="shield">
+                            <input type="checkbox" id="randomShieldHold">
+                            <div>
+                                <div class="t">🛡️ 随机屏蔽长条 (Hold)</div>
+                                <div class="d">随机替换时保留 Hold 不变</div>
+                            </div>
+                        </label>
                     </div>
                 </div>
             </div>
@@ -909,7 +310,6 @@
         </div>
     </div>
 
-    <!-- 原有的处理进度弹窗 -->
     <div class="overlay" id="overlay">
         <div class="modal">
             <div class="pct" id="progPct">0%</div>
@@ -930,7 +330,6 @@
     </div>
 
     <script>
-        // ================= 安全防护 =================
         (function() {
             document.addEventListener('contextmenu', e => e.preventDefault());
             ['copy', 'cut', 'paste', 'selectstart'].forEach(evt => {
@@ -943,7 +342,6 @@
             });
         })();
 
-        // djb2 哈希算法 (与 index.html 一致)
         function simpleHash(str) {
             let hash = 5381;
             for (let i = 0; i < str.length; i++) {
@@ -952,45 +350,27 @@
             return (hash >>> 0).toString(16);
         }
 
-        // 验证访问凭证
         async function verifyAccess() {
             const token = localStorage.getItem('access_token');
-            if (!token) {
-                throw new Error('无凭证信息');
-            }
-
+            if (!token) throw new Error('无凭证信息');
             let parts;
             try {
                 const payloadStr = atob(token);
                 parts = payloadStr.split('|');
-            } catch (e) {
-                throw new Error('凭证格式损坏');
-            }
-
-            if (parts.length !== 3) {
-                throw new Error('凭证结构错误');
-            }
-
+            } catch (e) { throw new Error('凭证格式损坏'); }
+            if (parts.length !== 3) throw new Error('凭证结构错误');
             const timestamp = parseInt(parts[0], 10);
             const uid = parts[1];
             const providedSig = parts[2];
-
             const now = Date.now();
-            const expirationTime = timestamp + (60 * 60 * 1000); // 1小时有效
-
+            const expirationTime = timestamp + (60 * 60 * 1000);
             if (now > expirationTime) {
                 localStorage.removeItem('access_token');
                 throw new Error('凭证已过期 (超过1小时)');
             }
-
             const signString = `${timestamp}|${uid}`;
             const expectedSig = simpleHash(signString);
-
-            if (providedSig !== expectedSig) {
-                console.error("签名不匹配:", { provided: providedSig, expected: expectedSig });
-                throw new Error('签名校验失败 (凭证可能被篡改)');
-            }
-
+            if (providedSig !== expectedSig) throw new Error('签名校验失败 (凭证可能被篡改)');
             return true;
         }
 
@@ -998,41 +378,25 @@
             const overlay = document.getElementById('loading-overlay');
             overlay.style.opacity = '0';
             overlay.style.visibility = 'hidden';
-            setTimeout(() => {
-                if (overlay.style.visibility === 'hidden') {
-                    overlay.style.display = 'none';
-                }
-            }, 300);
+            setTimeout(() => { if (overlay.style.visibility === 'hidden') overlay.style.display = 'none'; }, 300);
         }
 
         function showAuthError(msg) {
             document.getElementById('error-title').innerText = '访问受限';
             document.getElementById('error-message').innerText = msg;
-
-            const detailsBox = document.getElementById('error-details');
-            detailsBox.innerText = '请先完成答题验证后再访问此页面。';
-            detailsBox.style.display = 'block';
-
+            document.getElementById('error-details').innerText = '请先完成答题验证后再访问此页面。';
+            document.getElementById('error-details').style.display = 'block';
             document.getElementById('error-modal').classList.add('active');
             document.getElementById('main-content').style.display = 'none';
             hideLoading();
         }
 
-        // 页面初始化
         (async function init() {
-            try {
-                await verifyAccess();
-            } catch (err) {
-                console.warn('访问被拒绝:', err);
-                showAuthError(err.message);
-                return;
-            }
-
-            // 验证通过，显示主内容并启动原有功能
+            try { await verifyAccess(); }
+            catch (err) { showAuthError(err.message); return; }
             document.getElementById('main-content').style.display = 'block';
             hideLoading();
 
-            // ========== 原有谱面工坊逻辑 (完全保留) ==========
             (function() {
                 'use strict';
                 const typeNames = { 1: 'Tap', 2: 'Drag', 3: 'Hold', 4: 'Flick' };
@@ -1051,7 +415,8 @@
                 const dropZone = $('#dropZone'), fileInput = $('#fileInput'), fileChip = $('#fileChip'), fileChipText = $('#fileChipText');
                 const emptyBox = $('#emptyBox'), workspace = $('#workspace');
                 const processBtn = $('#processBtn'), resetBtn = $('#resetBtn'), reportBtn = $('#reportBtn');
-                const globalSel = $('#globalSel'), shieldHold = $('#shieldHold');
+                const globalSel = $('#globalSel');
+                const shieldHold = $('#shieldHold');
                 const overlay = $('#overlay'), progPct = $('#progPct'), progStatus = $('#progStatus'), progBar = $('#progBar'), progDetail = $('#progDetail');
                 const toast = $('#toast');
                 const dynamicRules = $('#dynamicRules');
@@ -1059,15 +424,53 @@
                 const miniCanvasWrap = $('#miniCanvasWrap');
                 const canvasOverlay = $('#canvasOverlay');
                 const closeCanvasBtn = $('#closeCanvasBtn');
+                const randomBtn = $('[data-feat="random"]');
+                const randomShieldWrap = $('#randomShieldWrap');
+                const randomShieldHold = $('#randomShieldHold');
 
                 function resetZipState() { zipImportData = null; zipJsonPath = null; isZipImport = false; }
+
+                // 根据模式更新控件禁用状态
+                function updateModeControls() {
+                    const randomActive = randomBtn.classList.contains('active');
+                    const globalVal = globalSel.value;
+
+                    // 随机区域显示/隐藏
+                    if (randomActive) {
+                        randomShieldWrap.style.display = 'block';
+                    } else {
+                        randomShieldWrap.style.display = 'none';
+                        randomShieldHold.checked = false;
+                    }
+
+                    // 禁用逻辑
+                    if (randomActive) {
+                        setControlsDisabled(true, true);   // 禁用规则列表 + 全局
+                    } else {
+                        if (globalVal !== '0') {
+                            setControlsDisabled(true, false); // 禁用规则列表，全局不禁用
+                        } else {
+                            setControlsDisabled(false, false); // 全部启用
+                        }
+                    }
+                }
+
+                function setControlsDisabled(disableRules, disableGlobal) {
+                    dynamicRules.querySelectorAll('select').forEach(s => s.disabled = disableRules);
+                    addRuleBtn.disabled = disableRules;
+                    globalSel.disabled = disableGlobal;
+                }
+
                 function resetAllOptions() {
                     globalSel.value = '0';
                     dynamicRules.innerHTML = '';
-                    $$('[data-feat]').forEach(b => b.classList.remove('active'));
+                    randomBtn.classList.remove('active');
                     shieldHold.checked = false;
+                    randomShieldHold.checked = false;
+                    updateModeControls(); // 恢复启用状态
                 }
 
+                // 事件绑定
                 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-active'); });
                 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-active'));
                 dropZone.addEventListener('drop', e => {
@@ -1230,38 +633,35 @@
                     });
                     fromSelect.value = fromVal;
                     toSelect.value = toVal;
-
                     const updateDisabled = () => {
                         const fVal = parseInt(fromSelect.value);
                         const tVal = parseInt(toSelect.value);
-                        Array.from(toSelect.options).forEach(opt => {
-                            opt.disabled = (parseInt(opt.value) === fVal);
-                        });
-                        Array.from(fromSelect.options).forEach(opt => {
-                            opt.disabled = (parseInt(opt.value) === tVal);
-                        });
-                        if (fVal === tVal) {
-                            toSelect.value = Array.from(toSelect.options).find(o => !o.disabled)?.value || fVal;
-                        }
+                        Array.from(toSelect.options).forEach(opt => opt.disabled = (parseInt(opt.value) === fVal));
+                        Array.from(fromSelect.options).forEach(opt => opt.disabled = (parseInt(opt.value) === tVal));
+                        if (fVal === tVal) toSelect.value = Array.from(toSelect.options).find(o => !o.disabled)?.value || fVal;
                     };
-
                     fromSelect.addEventListener('change', updateDisabled);
                     toSelect.addEventListener('change', updateDisabled);
                     updateDisabled();
-
                     const delBtn = document.createElement('button');
                     delBtn.className = 'del-btn';
                     delBtn.textContent = '×';
                     delBtn.addEventListener('click', () => row.remove());
-
                     const arrow = document.createElement('span');
                     arrow.className = 'arrow';
                     arrow.textContent = '→';
-
                     row.appendChild(fromSelect);
                     row.appendChild(arrow);
                     row.appendChild(toSelect);
                     row.appendChild(delBtn);
+
+                    // 新行根据当前模式设置禁用状态
+                    const randomActive = randomBtn.classList.contains('active');
+                    const globalVal = globalSel.value;
+                    const disableRules = randomActive || (globalVal !== '0');
+                    fromSelect.disabled = disableRules;
+                    toSelect.disabled = disableRules;
+
                     return row;
                 }
 
@@ -1285,32 +685,54 @@
                     return { global, map };
                 }
 
-                $$('[data-feat]').forEach(btn => btn.addEventListener('click', () => btn.classList.toggle('active')));
+                // 随机按钮点击
+                randomBtn.addEventListener('click', () => {
+                    randomBtn.classList.toggle('active');
+                    updateModeControls();
+                });
+
+                // 全局统一下拉变化
+                globalSel.addEventListener('change', updateModeControls);
+
                 function getFeatures() {
-                    const out = {};
-                    $$('[data-feat]').forEach(btn => out[btn.dataset.feat] = btn.classList.contains('active'));
-                    return out;
+                    return { random: randomBtn.classList.contains('active') };
                 }
 
                 function processChartData(data, rules, shield, feats) {
-                    const {global, map} = rules;
                     const newData = JSON.parse(JSON.stringify(data));
                     const lines = newData.judgeLineList;
-                    for(let li=0; li<lines.length; li++) {
+
+                    if (feats.random) {
+                        const types = [1, 2, 3, 4];
+                        for (let li = 0; li < lines.length; li++) {
+                            const line = lines[li];
+                            ['notesAbove', 'notesBelow'].forEach(layer => {
+                                if (!line[layer]) return;
+                                line[layer] = line[layer].map(note => {
+                                    const noteCopy = { ...note };
+                                    const type = Number(noteCopy.type) || 0;
+                                    if (!(shield && type === 3)) {
+                                        noteCopy.type = types[Math.floor(Math.random() * types.length)];
+                                    }
+                                    return noteCopy;
+                                });
+                            });
+                        }
+                        return newData;
+                    }
+
+                    const { global, map } = rules;
+                    for (let li = 0; li < lines.length; li++) {
                         const line = lines[li];
-                        ['notesAbove','notesBelow'].forEach(layer => {
-                            if(!line[layer]) return;
+                        ['notesAbove', 'notesBelow'].forEach(layer => {
+                            if (!line[layer]) return;
                             const kept = [];
-                            for(let i=0; i<line[layer].length; i++) {
-                                const note = line[layer][i];
-                                const type = Number(note.type)||0;
-                                if(shield && type===3) { kept.push(note); continue; }
-                                if(feats.delFlick && type===4) continue;
-                                if(feats.delDrag && type===2) continue;
-                                if(global>0) note.type = global;
-                                else if(map[type]!==undefined) note.type = map[type];
-                                if(feats.mirrorX && typeof note.positionX==='number') note.positionX = -note.positionX;
-                                if(feats.randX && typeof note.positionX==='number') note.positionX += (Math.random()-0.5)*0.8;
+                            for (let i = 0; i < line[layer].length; i++) {
+                                const note = { ...line[layer][i] };
+                                const type = Number(note.type) || 0;
+                                if (shield && type === 3) { kept.push(note); continue; }
+                                if (global > 0) note.type = global;
+                                else if (map[type] !== undefined) note.type = map[type];
                                 kept.push(note);
                             }
                             line[layer] = kept;
@@ -1320,19 +742,22 @@
                 }
 
                 function generateDownloadName(baseName, feats, rules) {
-                    const {global, map} = rules;
-                    const base = baseName.replace(/\.(json|zip)$/i,'');
+                    const base = baseName.replace(/\.(json|zip)$/i, '');
                     const tags = [];
-                    if(global>0) tags.push('all'+(typeNames[global]||global));
-                    else if(Object.keys(map).length) tags.push('mod');
-                    if(feats.mirrorX) tags.push('mirror');
-                    if(feats.randX) tags.push('rand');
-                    if(feats.delFlick) tags.push('noflick');
-                    if(feats.delDrag) tags.push('nodrag');
-                    return base + (tags.length?'_'+tags.join('_'):'_processed');
+                    if (feats.random) {
+                        tags.push('random');
+                    } else {
+                        const { global, map } = rules;
+                        if (global > 0) tags.push('all' + (typeNames[global] || global));
+                        else if (Object.keys(map).length) tags.push('mod');
+                    }
+                    return base + (tags.length ? '_' + tags.join('_') : '_processed');
                 }
 
-                function applyDifficultyToInfo(infoContent, rules) {
+                function applyDifficultyToInfo(infoContent, rules, feats) {
+                    if (feats.random) {
+                        return infoContent.replace(/^(Level:\s*)\S+(\s*.*)$/m, '$1RANDOM$2');
+                    }
                     const { global, map } = rules;
                     let newDiff = null;
                     if (global > 0) {
@@ -1345,20 +770,19 @@
                     return infoContent.replace(/^(Level:\s*)\S+(\s*.*)$/m, `$1${newDiff}$2`);
                 }
 
-                processBtn.addEventListener('click', async ()=>{
+                processBtn.addEventListener('click', async () => {
                     try {
-                        if(!chartData) { showToast('❌','未加载','请先上传谱面'); return; }
+                        if (!chartData) { showToast('❌', '未加载', '请先上传谱面'); return; }
                         const rules = getRulesFromUI();
-                        const shield = shieldHold.checked;
                         const feats = getFeatures();
+                        const shield = feats.random ? randomShieldHold.checked : shieldHold.checked;
                         processBtn.disabled = true;
                         showOverlay(true);
                         setProgress(30, '处理中…', '正在应用修改');
                         const processedData = processChartData(chartData, rules, shield, feats);
                         const jsonStr = JSON.stringify(processedData);
-                        setProgress(70, '生成文件…', isZipImport?'重新打包 ZIP':'生成 JSON');
-
-                        if(isZipImport && zipImportData && zipJsonPath) {
+                        setProgress(70, '生成文件…', isZipImport ? '重新打包 ZIP' : '生成 JSON');
+                        if (isZipImport && zipImportData && zipJsonPath) {
                             const zip = await JSZip.loadAsync(zipImportData);
                             let infoFile = zip.file('info.txt') || zip.file('Info.txt') || zip.file('INFO.TXT');
                             if (!infoFile) {
@@ -1368,62 +792,62 @@
                             }
                             if (infoFile) {
                                 const infoContent = await infoFile.async('text');
-                                const newInfo = applyDifficultyToInfo(infoContent, rules);
+                                const newInfo = applyDifficultyToInfo(infoContent, rules, feats);
                                 zip.file(infoFile.name, newInfo);
-                                showToast('🔧','难度已更新',`info.txt 难度缩写已自动修改`);
+                                showToast('🔧', '难度已更新', `info.txt 难度缩写已自动修改`);
                             }
                             zip.file(zipJsonPath, jsonStr);
-                            const newZipBlob = await zip.generateAsync({type:'blob', compression:'DEFLATE'});
+                            const newZipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
                             const url = URL.createObjectURL(newZipBlob);
                             const a = document.createElement('a'); a.href = url;
                             a.download = generateDownloadName(fileName, feats, rules) + '.zip';
                             document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                            setTimeout(()=>URL.revokeObjectURL(url), 200);
+                            setTimeout(() => URL.revokeObjectURL(url), 200);
                             setProgress(100, '完成', 'ZIP 文件已下载');
-                            showToast('✅','处理完成', a.download);
+                            showToast('✅', '处理完成', a.download);
                         } else {
-                            const blob = new Blob([jsonStr], {type:'application/json'});
+                            const blob = new Blob([jsonStr], { type: 'application/json' });
                             const url = URL.createObjectURL(blob);
                             const a = document.createElement('a'); a.href = url;
                             a.download = generateDownloadName(fileName, feats, rules) + '.json';
                             document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                            setTimeout(()=>URL.revokeObjectURL(url), 200);
+                            setTimeout(() => URL.revokeObjectURL(url), 200);
                             setProgress(100, '完成', 'JSON 文件已下载');
-                            showToast('✅','处理完成', a.download);
+                            showToast('✅', '处理完成', a.download);
                         }
-                    } catch(err) { showToast('❌','处理失败',err.message); console.error(err); }
-                    finally { setTimeout(()=>{ showOverlay(false); processBtn.disabled = false; }, 800); }
+                    } catch (err) { showToast('❌', '处理失败', err.message); console.error(err); }
+                    finally { setTimeout(() => { showOverlay(false); processBtn.disabled = false; }, 800); }
                 });
 
                 resetBtn.addEventListener('click', resetAllOptions);
-                reportBtn.addEventListener('click', ()=>{
-                    if(!chartData||!statsCache) { showToast('❌','无数据','请先加载谱面'); return; }
-                    const s=statsCache;
+                reportBtn.addEventListener('click', () => {
+                    if (!chartData || !statsCache) { showToast('❌', '无数据', '请先加载谱面'); return; }
+                    const s = statsCache;
                     const lines = [
                         '╔══════════════════════════════════════════╗',
                         '║      Phigros Chart Analysis Report       ║',
                         '╠══════════════════════════════════════════╣',
                         `  File: ${fileName}`,
-                        `  Format: ${chartData.formatVersion??'Unknown'}`,
+                        `  Format: ${chartData.formatVersion ?? 'Unknown'}`,
                         `  BPM: ${getBpmFromChart(chartData)}`,
                         `  JudgeLines: ${chartData.judgeLineList.length}`,
                         `  Beat Range: ${s.minBeat.toFixed(1)} ~ ${s.maxBeat.toFixed(1)}`,
                         '╠══════════════════════════════════════════╣',
                         '  Note Statistics',
-                        `    Tap   : ${s[1]} (${pct(s[1],s.total)})`,
-                        `    Drag  : ${s[2]} (${pct(s[2],s.total)})`,
-                        `    Flick : ${s[4]} (${pct(s[4],s.total)})`,
-                        `    Hold  : ${s[3]} (${pct(s[3],s.total)})`,
+                        `    Tap   : ${s[1]} (${pct(s[1], s.total)})`,
+                        `    Drag  : ${s[2]} (${pct(s[2], s.total)})`,
+                        `    Flick : ${s[4]} (${pct(s[4], s.total)})`,
+                        `    Hold  : ${s[3]} (${pct(s[3], s.total)})`,
                         `    ────────`,
                         `    Total : ${s.total}`,
                         '╚══════════════════════════════════════════╝'
                     ].join('\n');
-                    const blob = new Blob([lines], {type:'text/plain'});
+                    const blob = new Blob([lines], { type: 'text/plain' });
                     const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a'); a.href=url; a.download=fileName.replace(/\.(json|zip)$/i,'_report.txt');
+                    const a = document.createElement('a'); a.href = url; a.download = fileName.replace(/\.(json|zip)$/i, '_report.txt');
                     document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                    setTimeout(()=>URL.revokeObjectURL(url), 200);
-                    showToast('📄','报告已导出','统计报告已下载');
+                    setTimeout(() => URL.revokeObjectURL(url), 200);
+                    showToast('📄', '报告已导出', '统计报告已下载');
                 });
 
                 miniCanvasWrap.addEventListener('click', () => {
@@ -1438,23 +862,21 @@
 
                 function showOverlay(on) { overlay.classList.toggle('on', on); }
                 function setProgress(pctVal, status, detail) {
-                    progPct.textContent = pctVal+'%'; progStatus.textContent = status;
-                    progBar.style.width = pctVal+'%'; progDetail.textContent = detail;
+                    progPct.textContent = pctVal + '%'; progStatus.textContent = status;
+                    progBar.style.width = pctVal + '%'; progDetail.textContent = detail;
                 }
                 let toastTimer;
-                function showToast(icon,title,msg) {
-                    $('#toastIcon').textContent=icon; $('#toastTitle').textContent=title; $('#toastMsg').textContent=msg;
+                function showToast(icon, title, msg) {
+                    $('#toastIcon').textContent = icon; $('#toastTitle').textContent = title; $('#toastMsg').textContent = msg;
                     toast.classList.add('on'); clearTimeout(toastTimer);
-                    toastTimer = setTimeout(()=>toast.classList.remove('on'), 3500);
+                    toastTimer = setTimeout(() => toast.classList.remove('on'), 3500);
                 }
-                window.addEventListener('resize', ()=>{
-                    if(chartData && statsCache) requestAnimationFrame(()=>drawTimeline(getAllNotes(chartData)));
+                window.addEventListener('resize', () => {
+                    if (chartData && statsCache) requestAnimationFrame(() => drawTimeline(getAllNotes(chartData)));
                 });
             })();
-            // ========== 原有逻辑结束 ==========
         })();
 
-        // 按钮事件绑定 (需在 DOM 加载后)
         document.getElementById('back-btn').addEventListener('click', () => {
             localStorage.removeItem('access_token');
             location.href = './index.html';
