@@ -8,6 +8,7 @@ import { Spinner } from './components/Spinner';
 import { BlacklistWarningPopup } from './components/BlacklistWarningPopup';
 import { isBlacklisted, BlacklistEntry } from './blacklist';
 import { SettingsPopup } from './components/SettingsPopup';
+import { DnsPopup } from './components/DnsPopup';
 import { FAQPopup } from './components/FAQPopup';
 import { AboutPopup } from './components/AboutPopup';
 import { useSettings } from './contexts/SettingsContext';
@@ -49,6 +50,7 @@ const App: React.FC = () => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isFaqOpen, setIsFaqOpen] = useState(false);
     const [isAboutOpen, setIsAboutOpen] = useState(false);
+    const [isDnsOpen, setIsDnsOpen] = useState(false);
     
     const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -429,6 +431,7 @@ const App: React.FC = () => {
             {isSettingsOpen && <SettingsPopup isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />}
             {isFaqOpen && <FAQPopup isOpen={isFaqOpen} onClose={() => setIsFaqOpen(false)} />}
             {isAboutOpen && <AboutPopup isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />}
+            {isDnsOpen && <DnsPopup isOpen={isDnsOpen} onClose={() => setIsDnsOpen(false)} />}
             {blacklistWarning && (
                 <BlacklistWarningPopup 
                     isOpen={!!blacklistWarning}
@@ -458,6 +461,7 @@ const App: React.FC = () => {
                         onSettingsClick={() => setIsSettingsOpen(true)} 
                         onFaqClick={() => setIsFaqOpen(true)}
                         onAboutClick={() => setIsAboutOpen(true)}
+                        onDnsClick={() => setIsDnsOpen(true)}
                     />
 
                     {!settings.bulkDownloadMode && (
