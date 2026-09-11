@@ -4,6 +4,7 @@ import { Spinner } from './Spinner';
 import { AssetDownloadWarningPopup } from './AssetDownloadWarningPopup';
 import { Song, FileInfo } from '../types';
 import { checkUrlExists, sendAssetDownloadNotification } from '../utils/api';
+import { ghRaw } from '../utils/sources';
 import { ArrowDownTrayIcon, AudioIcon, DocumentTextIcon, PhotoIcon, InformationCircleIcon } from './Icons';
 import { useSettings } from '../contexts/SettingsContext';
 
@@ -110,7 +111,7 @@ export const FileTable: React.FC<FileTableProps> = ({ selectedSong, onFilesFound
             // Add illustration
             filesToFind.push(
                 (async () => {
-                    const url = `https://raw.githubusercontent.com/7aGiven/Phigros_Resource/refs/heads/illustration/${songId}.png`;
+                    const url = ghRaw(`7aGiven/Phigros_Resource/refs/heads/illustration/${songId}.png`);
                     if (await checkUrl(url)) {
                         return { type: 'Illustration', name: `${songId}.png`, url };
                     }
@@ -121,7 +122,7 @@ export const FileTable: React.FC<FileTableProps> = ({ selectedSong, onFilesFound
             // Add low-res illustration
             filesToFind.push(
                 (async () => {
-                    const url = `https://raw.githubusercontent.com/7aGiven/Phigros_Resource/refs/heads/illustrationLowRes/${songId}.png`;
+                    const url = ghRaw(`7aGiven/Phigros_Resource/refs/heads/illustrationLowRes/${songId}.png`);
                     if (await checkUrl(url)) {
                         return { type: 'Illustration (Low-Res)', name: `${songId}.png`, url };
                     }
@@ -132,7 +133,7 @@ export const FileTable: React.FC<FileTableProps> = ({ selectedSong, onFilesFound
             // Add blurred illustration
             filesToFind.push(
                 (async () => {
-                    const url = `https://raw.githubusercontent.com/7aGiven/Phigros_Resource/refs/heads/illustrationBlur/${songId}.png`;
+                    const url = ghRaw(`7aGiven/Phigros_Resource/refs/heads/illustrationBlur/${songId}.png`);
                     if (await checkUrl(url)) {
                         return { type: 'Illustration (Blur)', name: `${songId}.png`, url };
                     }
@@ -143,7 +144,7 @@ export const FileTable: React.FC<FileTableProps> = ({ selectedSong, onFilesFound
             // Add audio
             filesToFind.push(
                 (async () => {
-                    const url = `https://raw.githubusercontent.com/7aGiven/Phigros_Resource/refs/heads/music/${songId}.ogg`;
+                    const url = ghRaw(`7aGiven/Phigros_Resource/refs/heads/music/${songId}.ogg`);
                     if (await checkUrl(url)) {
                         return { type: 'Audio', name: `${songId}.ogg`, url };
                     }
@@ -159,7 +160,7 @@ export const FileTable: React.FC<FileTableProps> = ({ selectedSong, onFilesFound
                     const diffKey = diff as keyof NonNullable<Song['difficulties']>;
                     if (selectedSong.difficulties?.[diffKey]) {
                         const fileName = `${diff}.json`;
-                        const url = `https://raw.githubusercontent.com/7aGiven/Phigros_Resource/refs/heads/chart/${songId}.0/${fileName}`;
+                        const url = ghRaw(`7aGiven/Phigros_Resource/refs/heads/chart/${songId}.0/${fileName}`);
                         filesToFind.push(Promise.resolve({
                             type: `Chart (${diff})`,
                             name: fileName,
@@ -173,7 +174,7 @@ export const FileTable: React.FC<FileTableProps> = ({ selectedSong, onFilesFound
                         (async (): Promise<FileInfo | null> => {
                             const fileName = `${diff}.json`;
                             const urlsToTry = [
-                                `https://raw.githubusercontent.com/7aGiven/Phigros_Resource/refs/heads/chart/${songId}.0/${fileName}`
+                                ghRaw(`7aGiven/Phigros_Resource/refs/heads/chart/${songId}.0/${fileName}`)
                             ];
 
                             for (const url of urlsToTry) {

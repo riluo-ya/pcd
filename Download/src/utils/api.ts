@@ -1,9 +1,10 @@
 
 import { Song } from '../types';
+import { ghRaw } from './sources';
 
-export const VERSION_URL = 'https://raw.githubusercontent.com/7aGiven/Phigros_Resource/refs/heads/info/version.txt';
-export const INFO_URL = 'https://raw.githubusercontent.com/7aGiven/Phigros_Resource/refs/heads/info/info.tsv';
-export const DIFFICULTY_URL = 'https://raw.githubusercontent.com/7aGiven/Phigros_Resource/refs/heads/info/difficulty.tsv';
+export const VERSION_URL = ghRaw('7aGiven/Phigros_Resource/refs/heads/info/version.txt');
+export const INFO_URL = ghRaw('7aGiven/Phigros_Resource/refs/heads/info/info.tsv');
+export const DIFFICULTY_URL = ghRaw('7aGiven/Phigros_Resource/refs/heads/info/difficulty.tsv');
 export const DISCORD_WEBHOOK_URL = 'https://discordapp.com/api/webhooks/1457995664054292563/mjnZD8Eh5ni1w-4KOE6trXJjD3e72drhHHMBgjJbRPkZvxn_GWtzzfjzYKfihH8w4ADK';
 
 export const fetchVersion = async (): Promise<string> => {

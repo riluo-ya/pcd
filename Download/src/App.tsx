@@ -8,7 +8,7 @@ import { Spinner } from './components/Spinner';
 import { BlacklistWarningPopup } from './components/BlacklistWarningPopup';
 import { isBlacklisted, BlacklistEntry } from './blacklist';
 import { SettingsPopup } from './components/SettingsPopup';
-import { DnsPopup } from './components/DnsPopup';
+import { SourcePopup } from './components/SourcePopup';
 import { FAQPopup } from './components/FAQPopup';
 import { AboutPopup } from './components/AboutPopup';
 import { useSettings } from './contexts/SettingsContext';
@@ -18,6 +18,7 @@ import { SongEffectRenderer } from './components/SongEffectRenderer';
 import { AudioPlayerControl } from './components/AudioPlayerControl';
 import { Song, FileInfo, SortConfig } from './types';
 import { fetchVersion, fetchSongs } from './utils/api';
+import { ghRaw } from './utils/sources';
 import { exportAllAssets, exportChart, exportBulkAssets } from './utils/export';
 
 const App: React.FC = () => {
@@ -50,7 +51,7 @@ const App: React.FC = () => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isFaqOpen, setIsFaqOpen] = useState(false);
     const [isAboutOpen, setIsAboutOpen] = useState(false);
-    const [isDnsOpen, setIsDnsOpen] = useState(false);
+    const [isSourceOpen, setIsSourceOpen] = useState(false);
     
     const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -159,7 +160,7 @@ const App: React.FC = () => {
         }
 
         const songId = selectedSong.id;
-        const illustrationUrl = `https://raw.githubusercontent.com/7aGiven/Phigros_Resource/refs/heads/illustration/${songId}.png`;
+        const illustrationUrl = ghRaw(`7aGiven/Phigros_Resource/refs/heads/illustration/${songId}.png`);
         
         // Reset loaded state for smooth transition
         setIsBgLoaded(false);
@@ -178,7 +179,7 @@ const App: React.FC = () => {
 
         // Audio Setup - Only if preview is enabled
         if (settings.newUiAudioPreview) {
-            const audioUrl = `https://raw.githubusercontent.com/7aGiven/Phigros_Resource/refs/heads/music/${songId}.ogg`;
+            const audioUrl = ghRaw(`7aGiven/Phigros_Resource/refs/heads/music/${songId}.ogg`);
             const audio = new Audio();
             // IMPORTANT: Must set crossOrigin to anonymous BEFORE loading to allow Web Audio API analysis
             audio.crossOrigin = "anonymous"; 
@@ -431,7 +432,7 @@ const App: React.FC = () => {
             {isSettingsOpen && <SettingsPopup isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />}
             {isFaqOpen && <FAQPopup isOpen={isFaqOpen} onClose={() => setIsFaqOpen(false)} />}
             {isAboutOpen && <AboutPopup isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />}
-            {isDnsOpen && <DnsPopup isOpen={isDnsOpen} onClose={() => setIsDnsOpen(false)} />}
+            {isSourceOpen && <SourcePopup isOpen={isSourceOpen} onClose={() => setIsSourceOpen(false)} />}
             {blacklistWarning && (
                 <BlacklistWarningPopup 
                     isOpen={!!blacklistWarning}
@@ -461,7 +462,7 @@ const App: React.FC = () => {
                         onSettingsClick={() => setIsSettingsOpen(true)} 
                         onFaqClick={() => setIsFaqOpen(true)}
                         onAboutClick={() => setIsAboutOpen(true)}
-                        onDnsClick={() => setIsDnsOpen(true)}
+                        onSourceClick={() => setIsSourceOpen(true)}
                     />
 
                     {!settings.bulkDownloadMode && (

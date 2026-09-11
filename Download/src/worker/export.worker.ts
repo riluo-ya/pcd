@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import { FileInfo, Song } from '../types';
 import { Settings } from '../defaultSettings';
+import { ghRaw } from '../utils/sources';
 
 // Define message types for type safety
 export type ExportMessage =
@@ -204,10 +205,10 @@ const handleExportBulkAssets = async (songs: Song[], delaySeconds: number) => {
 
         // Files to try fetching
         const filesToTry = [
-            { type: 'Illustration', name: 'illustration.png', url: `https://raw.githubusercontent.com/7aGiven/Phigros_Resource/refs/heads/illustration/${songId}.png` },
-            { type: 'Illustration (Low-Res)', name: 'illustration_low.png', url: `https://raw.githubusercontent.com/7aGiven/Phigros_Resource/refs/heads/illustrationLowRes/${songId}.png` },
-            { type: 'Illustration (Blur)', name: 'illustration_blur.png', url: `https://raw.githubusercontent.com/7aGiven/Phigros_Resource/refs/heads/illustrationBlur/${songId}.png` },
-            { type: 'Audio', name: 'music.ogg', url: `https://raw.githubusercontent.com/7aGiven/Phigros_Resource/refs/heads/music/${songId}.ogg` },
+            { type: 'Illustration', name: 'illustration.png', url: ghRaw(`7aGiven/Phigros_Resource/refs/heads/illustration/${songId}.png`) },
+            { type: 'Illustration (Low-Res)', name: 'illustration_low.png', url: ghRaw(`7aGiven/Phigros_Resource/refs/heads/illustrationLowRes/${songId}.png`) },
+            { type: 'Illustration (Blur)', name: 'illustration_blur.png', url: ghRaw(`7aGiven/Phigros_Resource/refs/heads/illustrationBlur/${songId}.png`) },
+            { type: 'Audio', name: 'music.ogg', url: ghRaw(`7aGiven/Phigros_Resource/refs/heads/music/${songId}.ogg`) },
         ];
 
         const difficulties = ['EZ', 'HD', 'IN', 'AT'];
@@ -215,7 +216,7 @@ const handleExportBulkAssets = async (songs: Song[], delaySeconds: number) => {
             filesToTry.push({
                 type: `Chart (${diff})`,
                 name: `${diff}.json`,
-                url: `https://raw.githubusercontent.com/7aGiven/Phigros_Resource/refs/heads/chart/${songId}.0/${diff}.json`
+                url: ghRaw(`7aGiven/Phigros_Resource/refs/heads/chart/${songId}.0/${diff}.json`)
             });
         });
 

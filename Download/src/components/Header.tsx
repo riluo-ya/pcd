@@ -5,10 +5,10 @@ interface HeaderProps {
     onSettingsClick: () => void;
     onFaqClick: () => void;
     onAboutClick: () => void;
-    onDnsClick: () => void;
+    onSourceClick: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = memo(({ onSettingsClick, onFaqClick, onAboutClick, onDnsClick }) => {
+export const Header: React.FC<HeaderProps> = memo(({ onSettingsClick, onFaqClick, onAboutClick, onSourceClick }) => {
     return (
         <header className="relative text-center group flex flex-col items-center gap-6">
             
@@ -55,10 +55,10 @@ export const Header: React.FC<HeaderProps> = memo(({ onSettingsClick, onFaqClick
                 </button>
                 <button 
                     type="button"
-                    onClick={onDnsClick}
+                    onClick={onSourceClick}
                     className="px-4 py-2 font-semibold rounded-lg shadow-md transition-colors duration-200 bg-slate-700/50 hover:bg-slate-700 text-slate-300 hover:text-white"
                 >
-                    DNS 切换
+                    加速源
                 </button>
             </div>
         </header>
