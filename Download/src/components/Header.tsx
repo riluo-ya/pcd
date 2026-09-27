@@ -1,5 +1,6 @@
 
 import React, { memo } from 'react';
+import { ClearCacheButton } from './ClearCacheButton';
 
 interface HeaderProps {
     onSettingsClick: () => void;
@@ -60,6 +61,7 @@ export const Header: React.FC<HeaderProps> = memo(({ onSettingsClick, onFaqClick
                 >
                     加速源
                 </button>
+                <ClearCacheButton />
             </div>
         </header>
     );
