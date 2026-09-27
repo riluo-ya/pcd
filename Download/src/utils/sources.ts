@@ -75,6 +75,60 @@ export function getSourceId(): string {
     return 'github';
 }
 
+// ============================================================
+// CDN 缓存版本号（cache epoch）
+// ------------------------------------------------------------
+// 背景：歌曲数据走 jsDelivr / gcore 等 CDN，上游更新后 CDN 边缘节点
+// 仍可能返回旧内容，只清浏览器缓存没用（缓存在 CDN 侧）。
+//
+// 做法：给数据请求 URL 追加版本号参数，让 CDN 视作新 URL 并回源。
+// - 首次访问：epoch 为空 → URL 不带参数 → 全站用户共享 CDN 缓存，最快
+// - 点「清除缓存」：epoch 递增为当前时间戳 → URL 变化 → CDN 强制回源拿最新
+// - 之后 epoch 不变 → 新版本重新被 CDN 缓存，速度恢复
+//
+// 该 key 必须列入 clearCache 的保留名单，否则清缓存时被删掉就白 bump 了。
+// ============================================================
+
+export const CACHE_EPOCH_KEY = 'pcd_cache_epoch';
+
+/** 读取当前 epoch，未设置时返回空串（表示不加参数，走共享缓存） */
+export function getCacheEpoch(): string {
+    try {
+        return localStorage.getItem(CACHE_EPOCH_KEY) || '';
+    } catch {
+        return '';
+    }
+}
+
+/** 递增 epoch 并返回新值，用于强制 CDN 回源 */
+export function bumpCacheEpoch(): string {
+    const next = String(Date.now());
+    try {
+        localStorage.setItem(CACHE_EPOCH_KEY, next);
+    } catch {
+        /* 存储不可用时至少让本次生效 */
+    }
+    return next;
+}
+
+/**
+ * 给 URL 追加缓存版本号参数。
+ * 只给「索引类数据」用（version.txt / info.tsv / difficulty.tsv）；
+ * 曲绘、音频、谱面等内容文件不要加 —— 内容固定，加了会白白回源变慢。
+ */
+export function withCacheBust(url: string, epoch?: string): string {
+    const v = epoch !== undefined ? epoch : getCacheEpoch();
+    if (!v) return url;
+    try {
+        const u = new URL(url, typeof window !== 'undefined' ? window.location.href : undefined);
+        u.searchParams.set('_cb', v);
+        return u.toString();
+    } catch {
+        const sep = url.includes('?') ? '&' : '?';
+        return `${url}${sep}_cb=${encodeURIComponent(v)}`;
+    }
+}
+
 /** 读取当前源对象 */
 export function getSource(): ResourceSource {
     const id = getSourceId();

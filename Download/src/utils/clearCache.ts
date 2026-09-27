@@ -11,10 +11,20 @@
 
 /**
  * 清理后要保留的 localStorage key。
- * access_token 是答题凭证，保留它 = 清完缓存不用重新答题。
- * 如果希望连登录一起清掉，把这个数组清空即可。
+ *
+ * - access_token：答题凭证，保留 = 清完不用重新答题
+ * - pcd_source_selected：用户选的加速源。不保留的话清完会掉回 GitHub 直连，
+ *   国内用户速度直接崩，还得手动再选一次 —— 这是要避免的。
+ * - pcd_dns_selected：同理，用户选的 DNS / 线路偏好
+ * - pcd_cache_epoch：CDN 缓存版本号。清缓存时会被 bump 成新值来强制 CDN 回源，
+ *   删掉它就白 bump 了，所以必须留下。
  */
-export const KEEP_STORAGE_KEYS: string[] = ['access_token'];
+export const KEEP_STORAGE_KEYS: string[] = [
+    'access_token',
+    'pcd_source_selected',
+    'pcd_dns_selected',
+    'pcd_cache_epoch',
+];
 
 /** 需要保留的 key 前缀（例如 'pcd_keep_'），一般留空 */
 export const KEEP_STORAGE_PREFIXES: string[] = [];
@@ -178,8 +188,23 @@ export async function hardReload(fallbackDelay = 800): Promise<void> {
     }, fallbackDelay);
 }
 
-/** 清缓存 + 强制刷新，一步到位 */
-export async function clearCacheAndReload(): Promise<ClearCacheReport> {
+/**
+ * 清缓存 + 强制刷新，一步到位。
+ *
+ * onBeforeClear：在清理之前执行（建议用来 bump CDN 缓存版本号，
+ * 这样刷新后数据请求会带新参数，强制 jsDelivr / gcore 等 CDN 回源取最新）。
+ * 注意它写入的 key 必须在 KEEP_STORAGE_KEYS 里，否则会被随后的清理删掉。
+ */
+export async function clearCacheAndReload(
+    onBeforeClear?: () => void | Promise<void>
+): Promise<ClearCacheReport> {
+    if (onBeforeClear) {
+        try {
+            await onBeforeClear();
+        } catch (e) {
+            console.warn('[clearCache] onBeforeClear 执行失败', e);
+        }
+    }
     const report = await clearSiteCache();
     await hardReload();
     return report;

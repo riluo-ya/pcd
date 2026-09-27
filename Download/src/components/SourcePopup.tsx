@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SOURCES, getSourceId, setSourceId } from '../utils/sources';
+import { SOURCES, getSourceId, setSourceId, bumpCacheEpoch } from '../utils/sources';
 
 interface SourcePopupProps {
     isOpen: boolean;
@@ -23,6 +23,9 @@ export const SourcePopup: React.FC<SourcePopupProps> = ({ isOpen, onClose }) => 
         if (id === selected) return;
         setSwitching(id);
         setSourceId(id);
+        // 换源等于换域名，目标 CDN 上可能缓存着旧数据，
+        // 顺带 bump 版本号，保证切过去拿到的就是最新内容。
+        bumpCacheEpoch();
         // 延迟触发刷新，让用户看到切换反馈
         window.setTimeout(() => {
             location.reload();

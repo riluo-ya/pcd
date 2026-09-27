@@ -1,14 +1,25 @@
 
 import { Song } from '../types';
-import { ghRaw } from './sources';
+import { ghRaw, withCacheBust } from './sources';
 
-export const VERSION_URL = ghRaw('7aGiven/Phigros_Resource/refs/heads/info/version.txt');
-export const INFO_URL = ghRaw('7aGiven/Phigros_Resource/refs/heads/info/info.tsv');
-export const DIFFICULTY_URL = ghRaw('7aGiven/Phigros_Resource/refs/heads/info/difficulty.tsv');
+const P_VERSION = '7aGiven/Phigros_Resource/refs/heads/info/version.txt';
+const P_INFO = '7aGiven/Phigros_Resource/refs/heads/info/info.tsv';
+const P_DIFFICULTY = '7aGiven/Phigros_Resource/refs/heads/info/difficulty.tsv';
+
+// 这三个是「索引类数据」，上游会更新，必须带缓存版本号，
+// 否则 jsDelivr / gcore 等 CDN 会一直返回旧版本。
+export const versionUrl = (): string => withCacheBust(ghRaw(P_VERSION));
+export const infoUrl = (): string => withCacheBust(ghRaw(P_INFO));
+export const difficultyUrl = (): string => withCacheBust(ghRaw(P_DIFFICULTY));
+
+/** 兼容旧写法：下面几个常量保留导出，但请不要再依赖它们拿最新数据 */
+export const VERSION_URL = versionUrl();
+export const INFO_URL = infoUrl();
+export const DIFFICULTY_URL = difficultyUrl();
 export const DISCORD_WEBHOOK_URL = 'https://discordapp.com/api/webhooks/1457995664054292563/mjnZD8Eh5ni1w-4KOE6trXJjD3e72drhHHMBgjJbRPkZvxn_GWtzzfjzYKfihH8w4ADK';
 
 export const fetchVersion = async (): Promise<string> => {
-    const response = await fetch(VERSION_URL);
+    const response = await fetch(versionUrl(), { cache: 'no-store' });
     if (!response.ok) {
         throw new Error(`Failed to fetch version: ${response.status} ${response.statusText}`);
     }
@@ -17,8 +28,8 @@ export const fetchVersion = async (): Promise<string> => {
 
 export const fetchSongs = async (): Promise<Song[]> => {
     const [infoRes, diffRes] = await Promise.all([
-        fetch(INFO_URL),
-        fetch(DIFFICULTY_URL)
+        fetch(infoUrl(), { cache: 'no-store' }),
+        fetch(difficultyUrl(), { cache: 'no-store' })
     ]);
 
     if (!infoRes.ok) {
