@@ -58,6 +58,22 @@
   transition: opacity 220ms ease, translate 220ms cubic-bezier(0.16, 1, 0.3, 1), border-color 220ms ease;
 }
 
+.motion-subgroup {
+  animation: subgroupIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: top center;
+}
+
+@keyframes subgroupIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes backdropIn {
   from {
     opacity: 0;
@@ -113,5 +129,9 @@
   .motion-switch-thumb,
   .motion-settings-group {
     transition-duration: 1ms;
+  }
+
+  .motion-subgroup {
+    animation: none;
   }
 }

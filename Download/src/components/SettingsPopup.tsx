@@ -34,9 +34,70 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ enabled, onChange, disabled
     </button>
 );
 
+/**
+ * 可折叠的子项区。
+ *
+ * - 父开关关闭 → 子项整体不渲染，连「展开」按钮也不出现（此时子项本来就不生效）
+ * - 父开关打开 → 默认展开，用户可自行收起 / 展开
+ */
+interface SubSettingsProps {
+    /** 父开关状态 */
+    enabled: boolean;
+    expanded: boolean;
+    onToggleExpand: () => void;
+    /** 用于无障碍标签，例如「新界面」 */
+    label: string;
+    children: React.ReactNode;
+}
+
+const SubSettings: React.FC<SubSettingsProps> = ({
+    enabled,
+    expanded,
+    onToggleExpand,
+    label,
+    children,
+}) => {
+    const open = enabled && expanded;
+    return (
+        <div>
+            {enabled && (
+                <button
+                    type="button"
+                    onClick={onToggleExpand}
+                    aria-expanded={expanded}
+                    aria-label={`${expanded ? '收起' : '展开'}${label}子项`}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded px-1.5 py-1 text-xs font-medium text-slate-400 transition-colors hover:text-brand-cyan focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:ring-offset-2 focus:ring-offset-slate-900"
+                >
+                    <svg
+                        className={`h-3.5 w-3.5 transition-transform duration-200 ${expanded ? 'rotate-90' : 'rotate-0'}`}
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                    >
+                        <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                    {expanded ? '收起子项' : '展开子项'}
+                </button>
+            )}
+            {open && (
+                <div className="motion-subgroup ml-1 mt-3 space-y-4 border-l-2 border-brand-cyan/40 pl-4">
+                    {children}
+                </div>
+            )}
+        </div>
+    );
+};
+
 export const SettingsPopup: React.FC<SettingsPopupProps> = ({ isOpen, onClose }) => {
     const { settings, setSettings } = useSettings();
     const [confirmReset, setConfirmReset] = useState(false);
+    // 子项展开状态：默认跟随父开关，用户可自行切换
+    const [newUiExpanded, setNewUiExpanded] = useState(settings.useNewUi);
+    const [shareCardExpanded, setShareCardExpanded] = useState(settings.shareCardEnabled);
 
     useEffect(() => {
         if (!isOpen) {
@@ -69,6 +130,8 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({ isOpen, onClose })
 
     const handleToggleUseNewUi = () => {
         setSettings(prev => ({ ...prev, useNewUi: !prev.useNewUi }));
+        // 打开时自动展开子项，关闭时收起
+        setNewUiExpanded(!settings.useNewUi);
     };
 
     const handleToggleAudioPreview = () => {
@@ -113,6 +176,7 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({ isOpen, onClose })
 
     const handleToggleShareCardEnabled = () => {
         setSettings(prev => ({ ...prev, shareCardEnabled: !prev.shareCardEnabled }));
+        setShareCardExpanded(!settings.shareCardEnabled);
     };
 
     const handleToggleShareCardBpm = () => {
@@ -213,7 +277,12 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({ isOpen, onClose })
                             <ToggleSwitch enabled={settings.shareCardEnabled} onChange={handleToggleShareCardEnabled} />
                         </div>
 
-                        <div className={`space-y-4 pl-4 border-l-2 ml-1 transition-all duration-200 ${!settings.shareCardEnabled ? 'opacity-40 pointer-events-none border-slate-700/30' : 'opacity-100 border-brand-cyan/40'}`}>
+                        <SubSettings
+                            enabled={settings.shareCardEnabled}
+                            expanded={shareCardExpanded}
+                            onToggleExpand={() => setShareCardExpanded(v => !v)}
+                            label="分享卡片"
+                        >
                             <div>
                                 <p className="font-semibold text-slate-300 text-sm">卡片内的谱面数据</p>
                                 <p className="text-xs text-slate-500">
@@ -264,7 +333,7 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({ isOpen, onClose })
                                     disabled={!settings.shareCardEnabled}
                                 />
                             </div>
-                        </div>
+                        </SubSettings>
                     </div>
 
                     <hr className="border-slate-700/50" />
@@ -280,7 +349,12 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({ isOpen, onClose })
                         </div>
 
                         {/* Sub-settings for New UI */}
-                        <div className={`motion-settings-group space-y-4 pl-4 border-l-2 ml-1 ${!settings.useNewUi ? 'opacity-40 pointer-events-none translate-y-1 border-slate-700/30' : 'opacity-100 translate-y-0 border-brand-cyan/40'}`}>
+                        <SubSettings
+                            enabled={settings.useNewUi}
+                            expanded={newUiExpanded}
+                            onToggleExpand={() => setNewUiExpanded(v => !v)}
+                            label="新界面"
+                        >
                              <div className="flex items-center justify-between">
                                 <div>
                                     <p className="font-semibold text-slate-300 text-sm">播放音频预览（开发中）</p>
@@ -417,13 +491,13 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({ isOpen, onClose })
                                     <p className="font-semibold text-slate-300 text-sm">歌曲专属特效（开发中）</p>
                                     <p className="text-xs text-slate-500">选择✨特定✨歌曲时显示独特的「异常」特效。可能导致卡顿。<br/>（部分特效需要「音频预览」才能工作，因为它们与歌曲同步。）</p>
                                 </div>
-                                <ToggleSwitch 
-                                    enabled={settings.newUiSongSpecificEffects} 
-                                    onChange={handleToggleSongEffects} 
+                                <ToggleSwitch
+                                    enabled={settings.newUiSongSpecificEffects}
+                                    onChange={handleToggleSongEffects}
                                     disabled={!settings.useNewUi}
                                 />
                             </div>
-                        </div>
+                        </SubSettings>
                     </div>
                 </div>
 
