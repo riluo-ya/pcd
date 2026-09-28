@@ -323,47 +323,6 @@
             return (hash >>> 0).toString(16);
         }
 
-        /* ============================================================
-           加密数据多源加载（与 home.html 同策略）
-           单源 ./lz.data 失败会导致整页报废并误报「访问受限」，
-           把用户推回 quiz.html 形成死循环，这里改为多源回退。
-           ============================================================ */
-        function fetchWithTimeout(url, ms) {
-            const ctrl = new AbortController();
-            const timer = setTimeout(() => ctrl.abort(), ms);
-            return fetch(url, { cache: 'no-store', signal: ctrl.signal, redirect: 'follow' })
-                .then(r => { clearTimeout(timer); return r; })
-                .catch(e => { clearTimeout(timer); throw e; });
-        }
-
-        async function fetchEncryptedData(filename) {
-            const sources = [
-                { id: 'site',     name: '本站',          build: () => './' + filename },
-                { id: 'jsdelivr', name: 'jsDelivr CDN', build: () => 'https://cdn.jsdelivr.net/gh/riluo-ya/pcd@main/' + filename },
-                { id: 'gcore',    name: 'gcore CDN',    build: () => 'https://gcore.jsdelivr.net/gh/riluo-ya/pcd@main/' + filename },
-                { id: 'github',   name: 'GitHub Raw',   build: () => 'https://raw.githubusercontent.com/riluo-ya/pcd/main/' + filename },
-            ];
-            const errors = [];
-            for (const src of sources) {
-                try {
-                    const base = src.build();
-                    const sep = base.indexOf('?') >= 0 ? '&' : '?';
-                    const res = await fetchWithTimeout(base + sep + 't=' + Date.now(), 10000);
-                    if (!res.ok) throw new Error('HTTP ' + res.status);
-                    const text = (await res.text()).trim();
-                    if (!text) throw new Error('内容为空');
-                    if (!/^[A-Za-z0-9+/=\s]+$/.test(text)) throw new Error('返回内容不是有效的加密数据');
-                    console.log(filename + ' 加载成功，来源：' + src.name);
-                    return text;
-                } catch (e) {
-                    errors.push(src.name + '：' + (e && e.name === 'AbortError' ? '请求超时' : (e && e.message ? e.message : '未知错误')));
-                    console.warn('[' + filename + '] 从「' + src.name + '」加载失败', e);
-                }
-            }
-            throw new Error('已尝试全部 ' + sources.length + ' 个来源：\n' +
-                errors.map(e => '• ' + e).join('\n'));
-        }
-
         // ================= 解密模块 (与答题系统完全一致) =================
         function getCryptoPassword() {
             const p1 = String.fromCharCode(114, 105);
@@ -468,7 +427,15 @@
 
             try {
                 // 加载加密的 lz.data 并解密
-                const encryptedBase64 = await fetchEncryptedData('lz.data');
+                const response = await fetch('./lz.data?t=' + Date.now());
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const encryptedBase64 = await response.text();
+                if (!encryptedBase64 || encryptedBase64.trim().length === 0) {
+                    throw new Error('lz.data 文件内容为空');
+                }
 
                 const decryptedText = await decryptData(encryptedBase64, getCryptoPassword());
                 const data = JSON.parse(decryptedText);
@@ -550,8 +517,6 @@
         }
 
         function showAuthError(msg) {
-            const backBtn0 = document.getElementById('back-btn');
-            if (backBtn0) backBtn0.style.display = '';
             document.getElementById('error-title').innerText = '访问受限';
             document.getElementById('error-message').innerText = msg;
 
@@ -564,29 +529,10 @@
             hideLoading();
         }
 
-        /**
-         * 数据加载失败：与答题凭证无关，绝不显示「返回答题页」，
-         * 否则会让用户陷入 quiz.html ↔ 本页 的死循环。
-         */
         function showDataError(msg) {
-            document.getElementById('error-title').innerText = '数据加载失败';
-            document.getElementById('error-message').innerText = '数据没能加载出来：' + msg;
-            const detailsBox = document.getElementById('error-details');
-            if (detailsBox) {
-                detailsBox.innerText = '注意：这与答题验证无关，您的凭证仍然有效。请不要返回答题页，直接重试即可。';
-                detailsBox.style.display = 'block';
-            }
-            const backBtn = document.getElementById('back-btn');
-            if (backBtn) backBtn.style.display = 'none';
-            const modalBtns = document.querySelector('#error-modal .modal-btn-group');
-            if (modalBtns && !document.getElementById('data-retry-btn')) {
-                const rb = document.createElement('button');
-                rb.id = 'data-retry-btn';
-                rb.className = 'btn-primary';
-                rb.textContent = '立即重试';
-                rb.addEventListener('click', () => location.reload());
-                modalBtns.insertBefore(rb, document.getElementById('reload-btn'));
-            }
+            document.getElementById('error-title').innerText = '加载失败';
+            document.getElementById('error-message').innerText = '数据加载失败: ' + msg;
+            document.getElementById('error-details').style.display = 'none';
             document.getElementById('error-modal').classList.add('active');
             document.getElementById('main-content').style.display = 'none';
             hideLoading();
