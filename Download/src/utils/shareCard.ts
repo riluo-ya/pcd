@@ -902,21 +902,33 @@ export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
     ctx.font = `600 20px ${FONT_STACK}`;
     drawSpacedText(ctx, 'SONG', infoX, artY + 26, 4);
 
-    // 曲名：先按 62px 试，装不下就逐级缩小
-    const NAME_MAX_LINES = hasMeta ? 2 : 3;
+    // 曲名自适应：字号从 62 逐级下调，行数上限跟着剩余高度走。
+    // 长曲名会自动多行 + 缩小，而不是被硬截断成省略号。
+    const nameTop = artY + 26;
+    // 曲名下方必须留给作曲家、分隔线，有 BPM 行时还要多留一截（实测占用约 116px）
+    const nameReserve = hasMeta ? 156 : 48;
+    const nameAvailH = Math.max(120, artBottom - nameTop - nameReserve);
+
     let nameSize = 62;
     let nameLines: string[] = [];
-    for (; nameSize >= 30; nameSize -= 2) {
+    let lineH = nameSize * 1.24;
+    for (; nameSize >= 20; nameSize -= 2) {
         ctx.font = `700 ${nameSize}px ${FONT_STACK}`;
-        nameLines = wrapText(ctx, song.name || '未命名', infoW, NAME_MAX_LINES);
+        lineH = nameSize * 1.24;
+        // 第一行基线落在 nameTop + nameSize，这段高度也要扣掉
+        const usable = nameAvailH - nameSize;
+        // 字号越小能塞的行数越多；上限 5 行，够超长曲名用，又不至于挤成一片小字
+        const maxLines = Math.max(1, Math.min(5, Math.floor(usable / lineH)));
+        nameLines = wrapText(ctx, song.name || '未命名', infoW, maxLines);
         if (!nameLines.truncated) break;
     }
-    if (nameSize < 30) nameSize = 30;
+    if (nameSize < 20) nameSize = 20;
+
     ctx.font = `700 ${nameSize}px ${FONT_STACK}`;
     ctx.fillStyle = theme.text;
     ctx.textAlign = 'left';
-    let ty = artY + 26 + 62;
-    const lineH = nameSize * 1.24;
+    // 顶部对齐，紧跟 SONG 标签；下方留白由作曲家与分隔线自然填充
+    const ty = nameTop + nameSize;
     nameLines.forEach((ln, i) => {
         ctx.fillText(ln, infoX, ty + i * lineH);
     });

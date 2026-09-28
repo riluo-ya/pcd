@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Song } from '../types';
 import { ghRaw } from '../utils/sources';
+import { useSettings } from '../contexts/SettingsContext';
 import {
     CARD_THEMES,
     CardThemeId,
@@ -104,8 +105,8 @@ async function loadIllustration(songId: string): Promise<HTMLImageElement | null
 }
 
 export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, onClose }) => {
+    const { settings } = useSettings();
     const [themeId, setThemeId] = useState<CardThemeId>('midnight');
-    const [withNotes, setWithNotes] = useState(false);
     const [dataUrl, setDataUrl] = useState<string | null>(null);
     const [status, setStatus] = useState<'idle' | 'building' | 'ready'>('idle');
     const [illuReady, setIlluReady] = useState(false);
@@ -117,6 +118,20 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
     });
     const [loadingNotes, setLoadingNotes] = useState(false);
     const [tinted, setTinted] = useState(false);
+
+    // 只要有一项谱面数据被开启，就需要下载谱面文件解析
+    const needsChart =
+        settings.shareCardBpm ||
+        settings.shareCardJudgeLines ||
+        settings.shareCardDuration ||
+        settings.shareCardNoteCounts;
+
+    // 只把设置里开启的项交给卡片渲染
+    const visibleChartInfo = {
+        bpm: settings.shareCardBpm ? chartInfo.bpm : null,
+        judgeLines: settings.shareCardJudgeLines ? chartInfo.judgeLines : null,
+        duration: settings.shareCardDuration ? chartInfo.duration : null,
+    };
 
     const illuRef = useRef<HTMLImageElement | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -138,7 +153,7 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
         setDataUrl(null);
         setNoteCounts({});
         setChartInfo({ bpm: null, judgeLines: null, duration: null });
-        setWithNotes(false);
+
 
         loadIllustration(song.id).then(img => {
             if (cancelled || !aliveRef.current) return;
@@ -161,8 +176,8 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
                 song,
                 illustration: illuRef.current,
                 theme,
-                noteCounts: withNotes ? noteCounts : undefined,
-                chartInfo: withNotes ? chartInfo : undefined,
+                noteCounts: settings.shareCardNoteCounts ? noteCounts : undefined,
+                chartInfo: visibleChartInfo,
                 qrText: `https://pcd.bot.cd/?song=${encodeURIComponent(song.id)}`,
             });
             canvasRef.current = canvas;
@@ -172,7 +187,7 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
             console.error('[shareCard] 生成失败', err);
             setStatus('idle');
         }
-    }, [song, illuReady, themeId, withNotes, noteCounts, chartInfo]);
+    }, [song, illuReady, themeId, noteCounts, chartInfo, settings.shareCardNoteCounts, visibleChartInfo.bpm, visibleChartInfo.judgeLines, visibleChartInfo.duration]);
 
     useEffect(() => {
         build();
@@ -180,7 +195,7 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
 
     // 勾选后异步拉取：各难度物量 + 曲目级 BPM / 判定线 / 时长
     useEffect(() => {
-        if (!withNotes || !song || !isOpen) return;
+        if (!needsChart || !song || !isOpen) return;
         let cancelled = false;
         setLoadingNotes(true);
         (async () => {
@@ -214,7 +229,7 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
         return () => {
             cancelled = true;
         };
-    }, [withNotes, song?.id, isOpen]);
+    }, [needsChart, song?.id, isOpen]);
 
     const handleDownload = () => {
         if (!canvasRef.current || !song) return;
@@ -288,22 +303,6 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
                             ))}
                         </div>
                     </div>
-
-                    {/* 谱面数据开关 */}
-                    <label className="flex items-start gap-3 mb-4 cursor-pointer select-none">
-                        <input
-                            type="checkbox"
-                            checked={withNotes}
-                            onChange={e => setWithNotes(e.target.checked)}
-                            className="mt-1 w-4 h-4 accent-cyan-400"
-                        />
-                        <div>
-                            <div className="text-sm text-slate-200">显示谱面数据（BPM / 时长 / 判定线 / 物量）</div>
-                            <div className="text-xs text-slate-500">
-                                需要下载各难度谱面文件解析，开启后会稍慢一点
-                            </div>
-                        </div>
-                    </label>
 
                     {/* 预览 */}
                     <div className="relative rounded-xl overflow-hidden bg-slate-950 border border-slate-700/80 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/5">

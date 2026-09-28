@@ -686,8 +686,8 @@ const App: React.FC = () => {
                                     </div>
                                 )}
 
-                                {/* 谱面分享卡片入口：选中歌曲后即可生成 */}
-                                {selectedSong && (
+                                {/* 谱面分享卡片入口：选中歌曲后即可生成（可在设置里关闭） */}
+                                {selectedSong && settings.shareCardEnabled && (
                                     <div className="mt-5 flex justify-center">
                                         <button
                                             type="button"

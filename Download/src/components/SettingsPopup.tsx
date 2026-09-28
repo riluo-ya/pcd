@@ -111,6 +111,26 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({ isOpen, onClose })
         setSettings(prev => ({ ...prev, bulkDownloadMode: !prev.bulkDownloadMode }));
     };
 
+    const handleToggleShareCardEnabled = () => {
+        setSettings(prev => ({ ...prev, shareCardEnabled: !prev.shareCardEnabled }));
+    };
+
+    const handleToggleShareCardBpm = () => {
+        setSettings(prev => ({ ...prev, shareCardBpm: !prev.shareCardBpm }));
+    };
+
+    const handleToggleShareCardJudgeLines = () => {
+        setSettings(prev => ({ ...prev, shareCardJudgeLines: !prev.shareCardJudgeLines }));
+    };
+
+    const handleToggleShareCardDuration = () => {
+        setSettings(prev => ({ ...prev, shareCardDuration: !prev.shareCardDuration }));
+    };
+
+    const handleToggleShareCardNoteCounts = () => {
+        setSettings(prev => ({ ...prev, shareCardNoteCounts: !prev.shareCardNoteCounts }));
+    };
+
     return (
         <div 
             className="motion-backdrop fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
@@ -179,6 +199,72 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({ isOpen, onClose })
                              <p className="text-sm text-slate-400">启用包含高级信息的提示框（如歌曲 ID、曲绘分辨率）。</p>
                         </div>
                         <ToggleSwitch enabled={settings.advancedInfo} onChange={handleToggleAdvancedInfo} />
+                    </div>
+
+                    <hr className="border-slate-700/50" />
+
+                    {/* 分享卡片 */}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="font-semibold text-slate-200">分享卡片</p>
+                                <p className="text-sm text-slate-400">选中歌曲后显示「生成分享卡片」按钮。</p>
+                            </div>
+                            <ToggleSwitch enabled={settings.shareCardEnabled} onChange={handleToggleShareCardEnabled} />
+                        </div>
+
+                        <div className={`space-y-4 pl-4 border-l-2 ml-1 transition-all duration-200 ${!settings.shareCardEnabled ? 'opacity-40 pointer-events-none border-slate-700/30' : 'opacity-100 border-brand-cyan/40'}`}>
+                            <div>
+                                <p className="font-semibold text-slate-300 text-sm">卡片内的谱面数据</p>
+                                <p className="text-xs text-slate-500">
+                                    这些需要下载谱面文件解析，全部关闭时卡片会立即生成，无需等待。
+                                </p>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="font-semibold text-slate-300 text-sm">BPM</p>
+                                    <p className="text-xs text-slate-500">曲名下方显示速度标记。</p>
+                                </div>
+                                <ToggleSwitch
+                                    enabled={settings.shareCardBpm}
+                                    onChange={handleToggleShareCardBpm}
+                                    disabled={!settings.shareCardEnabled}
+                                />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="font-semibold text-slate-300 text-sm">判定线数</p>
+                                    <p className="text-xs text-slate-500">显示谱面用到的判定线数量。</p>
+                                </div>
+                                <ToggleSwitch
+                                    enabled={settings.shareCardJudgeLines}
+                                    onChange={handleToggleShareCardJudgeLines}
+                                    disabled={!settings.shareCardEnabled}
+                                />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="font-semibold text-slate-300 text-sm">时长</p>
+                                    <p className="text-xs text-slate-500">按谱面拍数与 BPM 换算的曲目长度。</p>
+                                </div>
+                                <ToggleSwitch
+                                    enabled={settings.shareCardDuration}
+                                    onChange={handleToggleShareCardDuration}
+                                    disabled={!settings.shareCardEnabled}
+                                />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="font-semibold text-slate-300 text-sm">各难度物量</p>
+                                    <p className="text-xs text-slate-500">每个难度后面显示 Notes 物量。</p>
+                                </div>
+                                <ToggleSwitch
+                                    enabled={settings.shareCardNoteCounts}
+                                    onChange={handleToggleShareCardNoteCounts}
+                                    disabled={!settings.shareCardEnabled}
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     <hr className="border-slate-700/50" />

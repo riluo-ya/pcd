@@ -15,6 +15,12 @@ export interface Settings {
     newUiVisualizerOpacity: number;
     newUiSongSpecificEffects: boolean;
     bulkDownloadMode: boolean;
+    // 分享卡片
+    shareCardEnabled: boolean;
+    shareCardBpm: boolean;
+    shareCardJudgeLines: boolean;
+    shareCardDuration: boolean;
+    shareCardNoteCounts: boolean;
 }
 
 export const defaultSettings: Settings = {
@@ -32,4 +38,9 @@ export const defaultSettings: Settings = {
     newUiVisualizerOpacity: 60,
     newUiSongSpecificEffects: false,
     bulkDownloadMode: false,
+    shareCardEnabled: true,
+    shareCardBpm: true,
+    shareCardJudgeLines: true,
+    shareCardDuration: true,
+    shareCardNoteCounts: true,
 };
