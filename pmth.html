@@ -206,6 +206,57 @@
         @keyframes shimmer { 0% { transform:translateX(-100%); } 100% { transform:translateX(100%); } }
         @keyframes slideIn { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }
     </style>
+    <style>
+        /* ===== 批量上传 + 整合功能 ===== */
+        .batch-panel { margin-top: 14px; }
+        .batch-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+        .batch-head .bt { font-size: 15px; font-weight: 700; color: #fff; }
+        .batch-head .bc { font-size: 12px; color: #94a3b8; }
+        .batch-head .bbtn { padding: 6px 12px; font-size: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,.16); background: transparent; color: #cbd5e1; cursor: pointer; font-family: inherit; }
+        .batch-head .bbtn:hover { border-color: var(--accent); color: var(--accent); }
+        .batch-head .bbtn.danger:hover { border-color: #f87171; color: #f87171; }
+        .chart-list { display: flex; flex-direction: column; gap: 8px; }
+        .chart-item {
+            display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+            padding: 10px 12px; border-radius: 10px;
+            border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.03);
+            transition: border-color .18s, background .18s;
+        }
+        .chart-item.is-main { border-color: var(--accent); background: rgba(34,211,238,.08); }
+        .chart-item .ci-chk { width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--accent); cursor: pointer; margin: 0; }
+        .chart-item .ci-label {
+            width: 74px; flex-shrink: 0; padding: 6px 8px; font-size: 13px; font-weight: 700;
+            text-align: center; border-radius: 7px; border: 1px solid rgba(255,255,255,.16);
+            background: rgba(0,0,0,.25); color: #fff; font-family: inherit; outline: none;
+        }
+        .chart-item .ci-label:focus { border-color: var(--accent); }
+        .chart-item .ci-name { flex: 1; min-width: 0; font-size: 13px; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .chart-item .ci-meta { font-size: 11px; color: #94a3b8; flex-shrink: 0; }
+        .chart-item .ci-main-btn {
+            flex-shrink: 0; padding: 5px 10px; font-size: 12px; border-radius: 7px;
+            border: 1px solid rgba(255,255,255,.16); background: transparent; color: #cbd5e1; cursor: pointer; font-family: inherit;
+        }
+        .chart-item .ci-main-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .chart-item.is-main .ci-main-btn { background: var(--accent); color: #062b32; border-color: var(--accent); font-weight: 700; cursor: default; }
+        .chart-item .ci-del { flex-shrink: 0; width: 28px; height: 28px; padding: 0; border-radius: 7px; border: none; background: transparent; color: #94a3b8; font-size: 15px; cursor: pointer; line-height: 1; }
+        .chart-item .ci-del:hover { color: #f87171; background: rgba(248,113,113,.14); }
+        .merge-opts { margin-top: 12px; padding-top: 12px; border-top: 1px dashed rgba(255,255,255,.14); }
+        .merge-opts .mo-row { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; flex-wrap: wrap; }
+        .merge-opts .mo-row > label { font-size: 12px; color: #94a3b8; flex-shrink: 0; }
+        .merge-opts select, .merge-opts input[type="number"] {
+            padding: 7px 10px; font-size: 13px; border-radius: 7px;
+            border: 1px solid rgba(255,255,255,.16); background: rgba(0,0,0,.25);
+            color: #fff; font-family: inherit; outline: none;
+        }
+        .merge-opts select { flex: 1; min-width: 130px; }
+        .merge-opts input[type="number"] { width: 84px; }
+        .merge-opts .mo-tip { font-size: 11px; color: #94a3b8; line-height: 1.55; }
+        @media (max-width: 600px) {
+            .chart-item { padding: 9px 10px; gap: 8px; }
+            .chart-item .ci-name { flex: 1 1 100%; order: 2; }
+            .chart-item .ci-meta { order: 3; }
+        }
+    </style>
 </head>
 <body>
     <div id="loading-overlay"><div class="spinner"></div></div>
@@ -230,13 +281,27 @@
         </header>
 
         <div class="uploader" id="dropZone">
-            <input type="file" id="fileInput" accept=".json,.zip,application/json,application/zip">
+            <input type="file" id="fileInput" accept=".json,.zip,application/json,application/zip" multiple>
             <div class="uploader-icon">📂</div>
             <h3>点击或拖拽上传谱面 JSON / ZIP</h3>
-            <span>支持 Phigros formatVersion 2 / 3 · ZIP 自动识别 JSON 与 info.txt</span>
+            <span>支持批量上传：同一首歌的多个难度可一次选中，之后用「整合」混排</span>
             <div class="file-chip" id="fileChip">
                 <span>✓</span>
                 <span id="fileChipText">未选择文件</span>
+            </div>
+        </div>
+
+        <div class="card batch-panel" id="batchPanel" style="display:none">
+            <div class="card-head"><div class="dot" style="background:var(--accent);color:var(--accent)"></div>已载入谱面</div>
+            <div class="batch-head">
+                <span class="bc" id="batchCount"></span>
+                <span style="flex:1"></span>
+                <button type="button" class="bbtn" id="addMoreBtn">＋ 继续添加</button>
+                <button type="button" class="bbtn danger" id="clearAllBtn">清空</button>
+            </div>
+            <div class="chart-list" id="chartList"></div>
+            <div class="mo-tip" style="margin-top:8px;font-size:11px;color:#94a3b8">
+                ☑ 勾选 = 参与整合　·　点「设为主谱面」指定基准（决定 BPM、背景、判定线来源）
             </div>
         </div>
 
@@ -290,6 +355,7 @@
                     <div class="card-head"><div class="dot" style="background:var(--hold);color:var(--hold)"></div>高级功能</div>
                     <div class="feat-grid">
                         <button class="feat-btn" data-feat="random"><span class="em">🎲</span><span>随机</span></button>
+                        <button class="feat-btn" data-feat="merge"><span class="em">🧩</span><span>整合</span></button>
                     </div>
                     <div id="randomShieldWrap" style="display:none; margin-top:12px;">
                         <label class="shield">
@@ -299,6 +365,32 @@
                                 <div class="d">随机替换时保留 Hold 不变</div>
                             </div>
                         </label>
+                    </div>
+                    <div id="mergeWrap" style="display:none; margin-top:12px;">
+                        <div class="merge-opts">
+                            <div class="mo-row">
+                                <label>混排方式</label>
+                                <select id="mergeModeSel">
+                                    <option value="even">平均开来（各难度轮流交替）</option>
+                                    <option value="random">随机插入（每段纯随机）</option>
+                                </select>
+                            </div>
+                            <div class="mo-row">
+                                <label>分段数</label>
+                                <input type="number" id="segCount" value="16" min="2" max="512" step="1">
+                                <span class="mo-tip">把全曲按时间切成 N 段，每段取一个难度</span>
+                            </div>
+                            <div class="mo-row">
+                                <label class="shield" style="flex:1 1 200px; min-width:200px">
+                                    <input type="checkbox" id="dedupeLines" checked>
+                                    <div>
+                                        <div class="t">🧬 合并相同判定线</div>
+                                        <div class="d">各难度共用的判定线只保留一条</div>
+                                    </div>
+                                </label>
+                            </div>
+                            <div class="mo-tip" id="mergeTip"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -427,12 +519,26 @@
                 const randomBtn = $('[data-feat="random"]');
                 const randomShieldWrap = $('#randomShieldWrap');
                 const randomShieldHold = $('#randomShieldHold');
+                const mergeBtn = $('[data-feat="merge"]');
+                const mergeWrap = $('#mergeWrap');
+                const mergeModeSel = $('#mergeModeSel');
+                const segCount = $('#segCount');
+                const dedupeLines = $('#dedupeLines');
+                const mergeTip = $('#mergeTip');
+                const chartList = $('#chartList');
+                const batchPanel = $('#batchPanel');
+                const batchCount = $('#batchCount');
+
+                // 批量谱面：{ id, name, label, data, zip, include, isMain }
+                let charts = [];
+                let nextChartId = 1;
 
                 function resetZipState() { zipImportData = null; zipJsonPath = null; isZipImport = false; }
 
                 // 根据模式更新控件禁用状态
                 function updateModeControls() {
                     const randomActive = randomBtn.classList.contains('active');
+                    const mergeActive = mergeBtn.classList.contains('active');
                     const globalVal = globalSel.value;
 
                     // 随机区域显示/隐藏
@@ -443,7 +549,10 @@
                         randomShieldHold.checked = false;
                     }
 
-                    // 禁用逻辑
+                    // 整合区域显示/隐藏
+                    mergeWrap.style.display = mergeActive ? 'block' : 'none';
+
+                    // 禁用逻辑：整合模式下替换规则依然可用（可叠加在整合结果上）
                     if (randomActive) {
                         setControlsDisabled(true, true);   // 禁用规则列表 + 全局
                     } else {
@@ -465,6 +574,7 @@
                     globalSel.value = '0';
                     dynamicRules.innerHTML = '';
                     randomBtn.classList.remove('active');
+                    mergeBtn.classList.remove('active');
                     shieldHold.checked = false;
                     randomShieldHold.checked = false;
                     updateModeControls(); // 恢复启用状态
@@ -475,37 +585,175 @@
                 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-active'));
                 dropZone.addEventListener('drop', e => {
                     e.preventDefault(); dropZone.classList.remove('drag-active');
-                    const f = e.dataTransfer.files[0]; if(f) ingestFile(f);
+                    ingestFiles(e.dataTransfer.files);
                 });
                 dropZone.addEventListener('click', (e) => { if(e.target !== fileInput) fileInput.click(); });
-                fileInput.addEventListener('change', e => { const f = e.target.files[0]; if(f) ingestFile(f); fileInput.value = ''; });
+                fileInput.addEventListener('change', e => { ingestFiles(e.target.files); fileInput.value = ''; });
 
                 function isZipFile(file) { return file.name.toLowerCase().endsWith('.zip') || file.type === 'application/zip'; }
                 function isJsonFile(file) { return file.name.toLowerCase().endsWith('.json') || file.type === 'application/json'; }
 
-                async function ingestFile(file) {
+                /** 批量导入：逐个解析，成功的追加到 charts，最后统一刷新 */
+                async function ingestFiles(fileList) {
+                    const files = Array.from(fileList || []);
+                    if (!files.length) return;
+                    let ok = 0;
+                    for (const f of files) {
+                        if (isZipFile(f)) { if (await handleZipFile(f)) ok++; }
+                        else if (isJsonFile(f)) { if (await handleJsonFile(f)) ok++; }
+                        else showToast('❌', '格式错误', f.name + ' 不是 .json / .zip');
+                    }
+                    if (!ok) return;
+                    refreshCharts();
+                    showToast('✅', '已载入 ' + ok + ' 张', charts.length > 1
+                        ? ('共 ' + charts.length + ' 张谱面，可点「整合」混排')
+                        : (charts[0] ? charts[0].name : ''));
+                }
+
+                /** 从文件名猜难度标签，猜不到就按序号 */
+                function guessLabel(name, idx) {
+                    const up = String(name || '').toUpperCase().replace(/\.(JSON|ZIP)$/i, '');
+                    const m = up.match(/(?:^|[._\-\/\s])(EZ|EASY|HD|HARD|IN|INSANE|AT|ANOTHER|SP)(?:[._\-\/\s]|$)/);
+                    if (m) {
+                        const map = { EZ: 'EZ', EASY: 'EZ', HD: 'HD', HARD: 'HD', IN: 'IN', INSANE: 'IN', AT: 'AT', ANOTHER: 'AT', SP: 'SP' };
+                        return map[m[1]] || m[1];
+                    }
+                    return '谱面' + (idx + 1);
+                }
+
+                function countNotes(data) {
+                    let n = 0;
+                    (data.judgeLineList || []).forEach(l => { n += (l.notesAbove || []).length + (l.notesBelow || []).length; });
+                    return n;
+                }
+
+                function addChart(name, data, zip) {
+                    if (!data || typeof data !== 'object') { showToast('❌', '格式错误', name + ' 内容为空'); return null; }
+                    if (!Array.isArray(data.judgeLineList)) { showToast('❌', '格式错误', name + ' 缺少 judgeLineList'); return null; }
+                    if (data.judgeLineList.length === 0) { showToast('⚠️', '空谱面', name + ' 没有判定线'); return null; }
+                    const item = {
+                        id: 'c' + (nextChartId++),
+                        name: name,
+                        label: guessLabel(name, charts.length),
+                        data: data,
+                        zip: zip || null,
+                        include: true,
+                        isMain: charts.length === 0
+                    };
+                    charts.push(item);
+                    return item;
+                }
+
+                /** 主谱面变化时同步 chartData / ZIP 状态 / 统计 */
+                function refreshCharts() {
+                    if (!charts.length) {
+                        chartData = null;
+                        resetZipState();
+                        fileChip.classList.remove('show');
+                        fileChipText.textContent = '未选择文件';
+                        emptyBox.style.display = '';
+                        workspace.classList.remove('active');
+                        batchPanel.style.display = 'none';
+                        renderChartList();
+                        return;
+                    }
+                    let mi = charts.findIndex(c => c.isMain);
+                    if (mi < 0) { mi = 0; charts[0].isMain = true; }
+                    const main = charts[mi];
+                    chartData = main.data;
+                    fileName = main.name;
                     resetZipState();
-                    if(isZipFile(file)) await handleZipFile(file);
-                    else if(isJsonFile(file)) handleJsonFile(file);
-                    else showToast('❌','格式错误','请上传 .json 或 .zip 文件');
+                    if (main.zip) { zipImportData = main.zip.buf; zipJsonPath = main.zip.jsonPath; isZipImport = true; }
+                    fileChip.classList.add('show');
+                    fileChipText.textContent = charts.length > 1 ? ('已载入 ' + charts.length + ' 张谱面') : main.name;
+                    emptyBox.style.display = 'none';
+                    workspace.classList.add('active');
+                    batchPanel.style.display = '';
+                    renderChartList();
+                    updateModeControls();
+                    computeStats();
+                }
+
+                function setMain(i) {
+                    charts.forEach((c, k) => { c.isMain = (k === i); });
+                    refreshCharts();
+                    showToast('✅', '主谱面已切换', charts[i].name + ' 作为基准');
+                }
+
+                function renderChartList() {
+                    if (!chartList) return;
+                    chartList.innerHTML = '';
+                    charts.forEach((c, i) => {
+                        const row = document.createElement('div');
+                        row.className = 'chart-item' + (c.isMain ? ' is-main' : '');
+
+                        const chk = document.createElement('input');
+                        chk.type = 'checkbox';
+                        chk.className = 'ci-chk';
+                        chk.checked = !!c.include;
+                        chk.title = '参与整合';
+                        chk.addEventListener('change', () => { c.include = chk.checked; renderMergeTip(); });
+
+                        const lab = document.createElement('input');
+                        lab.type = 'text';
+                        lab.className = 'ci-label';
+                        lab.value = c.label;
+                        lab.title = '难度标签，可自行修改';
+                        lab.addEventListener('input', () => { c.label = lab.value; renderMergeTip(); });
+
+                        const nm = document.createElement('div');
+                        nm.className = 'ci-name';
+                        nm.textContent = c.name;
+                        nm.title = c.name;
+
+                        const meta = document.createElement('div');
+                        meta.className = 'ci-meta';
+                        meta.textContent = countNotes(c.data) + ' 音符 · ' + c.data.judgeLineList.length + ' 线';
+
+                        const mb = document.createElement('button');
+                        mb.type = 'button';
+                        mb.className = 'ci-main-btn';
+                        mb.textContent = c.isMain ? '主谱面' : '设为主谱面';
+                        mb.addEventListener('click', () => setMain(i));
+
+                        const del = document.createElement('button');
+                        del.type = 'button';
+                        del.className = 'ci-del';
+                        del.textContent = '×';
+                        del.title = '移除这张';
+                        del.addEventListener('click', () => {
+                            charts.splice(i, 1);
+                            if (charts.length && !charts.some(x => x.isMain)) charts[0].isMain = true;
+                            refreshCharts();
+                        });
+
+                        row.appendChild(chk);
+                        row.appendChild(lab);
+                        row.appendChild(nm);
+                        row.appendChild(meta);
+                        row.appendChild(mb);
+                        row.appendChild(del);
+                        chartList.appendChild(row);
+                    });
+                    if (batchCount) {
+                        const m = charts.find(c => c.isMain);
+                        batchCount.textContent = charts.length + ' 张 · 基准：' + (m ? m.label : '-');
+                    }
                 }
 
                 function handleJsonFile(file) {
-                    fileName = file.name;
-                    fileChipText.textContent = file.name;
-                    fileChip.classList.add('show');
-                    isZipImport = false;
-                    const reader = new FileReader();
-                    reader.onerror = () => showToast('❌','读取失败','无法读取文件');
-                    reader.onload = ev => {
-                        try { loadChart(JSON.parse(ev.target.result)); }
-                        catch(err) { showToast('❌','解析失败','JSON无效: '+err.message); }
-                    };
-                    reader.readAsText(file);
+                    return new Promise(resolve => {
+                        const reader = new FileReader();
+                        reader.onerror = () => { showToast('❌', '读取失败', '无法读取 ' + file.name); resolve(false); };
+                        reader.onload = ev => {
+                            try { resolve(!!addChart(file.name, JSON.parse(ev.target.result), null)); }
+                            catch (err) { showToast('❌', '解析失败', file.name + ' JSON 无效: ' + err.message); resolve(false); }
+                        };
+                        reader.readAsText(file);
+                    });
                 }
 
                 async function handleZipFile(file) {
-                    fileName = file.name;
                     try {
                         const arrayBuffer = await file.arrayBuffer();
                         const zip = await JSZip.loadAsync(arrayBuffer);
@@ -519,13 +767,10 @@
                         const jsonEntry = zip.file(targetPath);
                         if(!jsonEntry) { showToast('❌','读取失败','无法读取 ZIP 内的 JSON'); return; }
                         const chartObj = JSON.parse(await jsonEntry.async('text'));
-                        zipImportData = arrayBuffer;
-                        zipJsonPath = targetPath;
-                        isZipImport = true;
-                        fileChipText.textContent = `📦 ${file.name} → ${targetPath}`;
-                        fileChip.classList.add('show');
-                        loadChart(chartObj);
-                    } catch(err) { showToast('❌','ZIP 处理失败',err.message); console.error(err); resetZipState(); }
+                        const item = addChart(file.name, chartObj, { buf: arrayBuffer, jsonPath: targetPath });
+                        if (item) item.name = file.name + ' → ' + targetPath;
+                        return !!item;
+                    } catch(err) { showToast('❌','ZIP 处理失败',err.message); console.error(err); return false; }
                 }
 
                 function loadChart(data) {
@@ -556,6 +801,176 @@
                         if(!isNaN(bpm) && bpm > 0) return bpm;
                     }
                     return 120;
+                }
+
+                /* ============================================================
+                   整合：把多张谱面（同一首歌的不同难度）按时段混排成一张
+                   ============================================================ */
+
+                /**
+                 * 判定线指纹：只看运动/旋转/消失/速度事件，不含音符。
+                 * 同一首歌的不同难度常共用判定线，指纹相同即可合并成一条。
+                 */
+                function lineSignature(line) {
+                    return JSON.stringify([
+                        Number(line.bpm) || 0,
+                        line.judgeLineMoveEvents || [],
+                        line.judgeLineRotateEvents || [],
+                        line.judgeLineDisappearEvents || [],
+                        line.speedEvents || []
+                    ]);
+                }
+
+                /** 构建合并后的判定线，并返回 谱面序号 -> [原线序 -> 新线序] 的映射 */
+                function buildMergedLines(list, dedupe) {
+                    const lines = [];
+                    const sigMap = new Map();
+                    const maps = [];
+                    list.forEach(chart => {
+                        const arr = [];
+                        chart.data.judgeLineList.forEach(line => {
+                            const sig = dedupe ? lineSignature(line) : null;
+                            let idx;
+                            if (sig !== null && sigMap.has(sig)) {
+                                idx = sigMap.get(sig);
+                            } else {
+                                const copy = JSON.parse(JSON.stringify(line));
+                                copy.notesAbove = [];
+                                copy.notesBelow = [];
+                                copy.numOfNotes = 0;
+                                lines.push(copy);
+                                idx = lines.length - 1;
+                                if (sig !== null) sigMap.set(sig, idx);
+                            }
+                            arr.push(idx);
+                        });
+                        maps.push(arr);
+                    });
+                    return { lines: lines, maps: maps };
+                }
+
+                /** 统计信息里展示合并后大概会有多少条判定线 */
+                function estimateMergedLines(list, dedupe) {
+                    return buildMergedLines(list, dedupe).lines.length;
+                }
+
+                /**
+                 * 整合主函数（纯函数，不改动入参）
+                 * @param list 参与整合的谱面数组（每项含 data / label）
+                 * @param opts { mode:'even'|'random', segments:number, dedupe:boolean }
+                 * @returns 合并后的谱面数据（其余字段沿用主谱面）
+                 */
+                function mergeCharts(list, opts) {
+                    if (!Array.isArray(list) || list.length < 2) return null;
+
+                    const mode = opts && opts.mode === 'random' ? 'random' : 'even';
+                    const dedupe = !!(opts && opts.dedupe);
+                    let seg = parseInt(opts && opts.segments, 10);
+                    if (isNaN(seg) || seg < 2) seg = 16;
+                    if (seg > 512) seg = 512;
+                    // 平均模式下段数至少要够每张谱面轮到一次
+                    if (mode === 'even' && seg < list.length) seg = list.length;
+
+                    let mainIdx = list.findIndex(c => c.isMain);
+                    if (mainIdx < 0) mainIdx = 0;
+                    const main = list[mainIdx];
+
+                    // 1) 时间轴以主谱面为准
+                    const mainNotes = getAllNotes(main.data);
+                    let minB = Infinity, maxB = -Infinity;
+                    mainNotes.forEach(n => {
+                        const t = Number(n.time);
+                        if (!isNaN(t)) { if (t < minB) minB = t; if (t > maxB) maxB = t; }
+                    });
+                    if (!isFinite(minB) || !isFinite(maxB) || maxB <= minB) { minB = 0; maxB = 1; }
+                    const range = (maxB - minB) || 1;
+
+                    // 2) 每段归属哪张谱面
+                    const owner = [];
+                    for (let i = 0; i < seg; i++) {
+                        owner.push(mode === 'even'
+                            ? list[i % list.length]
+                            : list[Math.floor(Math.random() * list.length)]);
+                    }
+
+                    // 3) 合并判定线
+                    const merged = buildMergedLines(list, dedupe);
+                    const lines = merged.lines;
+                    const maps = merged.maps;
+
+                    // 4) 按段挑音符，落到各自谱面映射后的判定线上
+                    const usedBy = new Map();
+                    list.forEach((chart, ci) => {
+                        const map = maps[ci];
+                        chart.data.judgeLineList.forEach((line, li) => {
+                            const target = lines[map[li]];
+                            if (!target) return;
+                            ['notesAbove', 'notesBelow'].forEach(layer => {
+                                const arr = line[layer];
+                                if (!Array.isArray(arr)) return;
+                                arr.forEach(note => {
+                                    const t = Number(note.time);
+                                    if (isNaN(t)) return;
+                                    if (t < minB - 1e-6 || t > maxB + 1e-6) return;
+                                    let si = Math.floor(((t - minB) / range) * seg);
+                                    if (si < 0) si = 0;
+                                    if (si >= seg) si = seg - 1;
+                                    if (owner[si] !== chart) return;
+                                    target[layer].push(JSON.parse(JSON.stringify(note)));
+                                    usedBy.set(chart.id, (usedBy.get(chart.id) || 0) + 1);
+                                });
+                            });
+                        });
+                    });
+
+                    // 5) 音符按时间排序，重算每条线的音符数
+                    let total = 0;
+                    lines.forEach(l => {
+                        ['notesAbove', 'notesBelow'].forEach(layer => {
+                            l[layer].sort((a, b) => (Number(a.time) || 0) - (Number(b.time) || 0));
+                            total += l[layer].length;
+                        });
+                        l.numOfNotes = l.notesAbove.length + l.notesBelow.length;
+                    });
+
+                    // 6) 输出沿用主谱面的元信息
+                    const out = JSON.parse(JSON.stringify(main.data));
+                    out.judgeLineList = lines;
+
+                    const perChart = {};
+                    list.forEach(c => { perChart[c.label] = usedBy.get(c.id) || 0; });
+
+                    return {
+                        data: out,
+                        info: {
+                            mode: mode,
+                            segments: seg,
+                            dedupe: dedupe,
+                            mainLabel: main.label,
+                            labels: list.map(c => c.label),
+                            lineCount: lines.length,
+                            totalNotes: total,
+                            perChart: perChart,
+                            beatRange: [minB, maxB]
+                        }
+                    };
+                }
+
+                /** 整合面板底部的实时说明 */
+                function renderMergeTip() {
+                    if (!mergeTip) return;
+                    const sel = charts.filter(c => c.include);
+                    if (sel.length < 2) {
+                        mergeTip.textContent = '请勾选至少 2 张谱面才能整合（当前已勾选 ' + sel.length + ' 张）。';
+                        return;
+                    }
+                    const seg = Math.max(2, parseInt(segCount.value, 10) || 16);
+                    const modeTxt = mergeModeSel.value === 'even' ? '平均轮流' : '纯随机';
+                    const lc = estimateMergedLines(sel, dedupeLines.checked);
+                    const m = charts.find(c => c.isMain) || sel[0];
+                    mergeTip.textContent = '把 ' + sel.map(c => c.label).join(' → ') +
+                        ' 按时间切成 ' + seg + ' 段，每段 ' + modeTxt + '取一个难度；' +
+                        '合并后判定线约 ' + lc + ' 条，BPM / 背景等沿用主谱面「' + m.label + '」。';
                 }
 
                 function computeStats() {
@@ -685,17 +1100,47 @@
                     return { global, map };
                 }
 
-                // 随机按钮点击
+                // 随机按钮点击（与整合互斥）
                 randomBtn.addEventListener('click', () => {
+                    mergeBtn.classList.remove('active');
                     randomBtn.classList.toggle('active');
                     updateModeControls();
+                });
+
+                // 整合按钮点击（与随机互斥）
+                mergeBtn.addEventListener('click', () => {
+                    if (charts.length < 2) {
+                        showToast('⚠️', '需要多张谱面', '请先上传至少 2 张谱面（同一首歌的不同难度）');
+                        return;
+                    }
+                    randomBtn.classList.remove('active');
+                    const on = !mergeBtn.classList.contains('active');
+                    mergeBtn.classList.toggle('active');
+                    updateModeControls();
+                    if (on) renderMergeTip();
+                });
+
+                mergeModeSel.addEventListener('change', renderMergeTip);
+                segCount.addEventListener('input', renderMergeTip);
+                dedupeLines.addEventListener('change', renderMergeTip);
+
+                $('#addMoreBtn').addEventListener('click', () => fileInput.click());
+                $('#clearAllBtn').addEventListener('click', () => {
+                    charts = [];
+                    nextChartId = 1;
+                    resetAllOptions();
+                    refreshCharts();
+                    showToast('🗑️', '已清空', '可以重新上传谱面');
                 });
 
                 // 全局统一下拉变化
                 globalSel.addEventListener('change', updateModeControls);
 
                 function getFeatures() {
-                    return { random: randomBtn.classList.contains('active') };
+                    return {
+                        random: randomBtn.classList.contains('active'),
+                        merge: mergeBtn.classList.contains('active')
+                    };
                 }
 
                 function processChartData(data, rules, shield, feats) {
@@ -741,9 +1186,14 @@
                     return newData;
                 }
 
-                function generateDownloadName(baseName, feats, rules) {
+                function generateDownloadName(baseName, feats, rules, mergedInfo) {
                     const base = baseName.replace(/\.(json|zip)$/i, '');
                     const tags = [];
+                    if (mergedInfo) {
+                        tags.push('mix' + mergedInfo.labels.join(''));
+                        tags.push(mergedInfo.mode === 'even' ? 'even' : 'rand');
+                        tags.push('s' + mergedInfo.segments);
+                    }
                     if (feats.random) {
                         tags.push('random');
                     } else {
@@ -754,7 +1204,11 @@
                     return base + (tags.length ? '_' + tags.join('_') : '_processed');
                 }
 
-                function applyDifficultyToInfo(infoContent, rules, feats) {
+                function applyDifficultyToInfo(infoContent, rules, feats, mergedInfo) {
+                    if (mergedInfo) {
+                        const tag = 'MIX-' + mergedInfo.labels.join('');
+                        return infoContent.replace(/^(Level:\s*)\S+(\s*.*)$/m, '$1' + tag + '$2');
+                    }
                     if (feats.random) {
                         return infoContent.replace(/^(Level:\s*)\S+(\s*.*)$/m, '$1RANDOM$2');
                     }
@@ -779,7 +1233,35 @@
                         processBtn.disabled = true;
                         showOverlay(true);
                         setProgress(30, '处理中…', '正在应用修改');
-                        const processedData = processChartData(chartData, rules, shield, feats);
+
+                        // 整合模式：先把多张谱面混排成一张，再走常规处理
+                        let srcData = chartData;
+                        let mergedInfo = null;
+                        if (feats.merge) {
+                            const sel = charts.filter(c => c.include);
+                            if (sel.length < 2) {
+                                showToast('❌', '整合失败', '请至少勾选 2 张谱面参与整合');
+                                processBtn.disabled = false;
+                                showOverlay(false);
+                                return;
+                            }
+                            setProgress(45, '整合中…', '混排 ' + sel.map(c => c.label).join(' / '));
+                            const res = mergeCharts(sel, {
+                                mode: mergeModeSel.value,
+                                segments: parseInt(segCount.value, 10),
+                                dedupe: dedupeLines.checked
+                            });
+                            if (!res) {
+                                showToast('❌', '整合失败', '整合结果为空');
+                                processBtn.disabled = false;
+                                showOverlay(false);
+                                return;
+                            }
+                            srcData = res.data;
+                            mergedInfo = res.info;
+                        }
+
+                        const processedData = processChartData(srcData, rules, shield, feats);
                         const jsonStr = JSON.stringify(processedData);
                         setProgress(70, '生成文件…', isZipImport ? '重新打包 ZIP' : '生成 JSON');
                         if (isZipImport && zipImportData && zipJsonPath) {
@@ -792,7 +1274,7 @@
                             }
                             if (infoFile) {
                                 const infoContent = await infoFile.async('text');
-                                const newInfo = applyDifficultyToInfo(infoContent, rules, feats);
+                                const newInfo = applyDifficultyToInfo(infoContent, rules, feats, mergedInfo);
                                 zip.file(infoFile.name, newInfo);
                                 showToast('🔧', '难度已更新', `info.txt 难度缩写已自动修改`);
                             }
@@ -800,7 +1282,7 @@
                             const newZipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
                             const url = URL.createObjectURL(newZipBlob);
                             const a = document.createElement('a'); a.href = url;
-                            a.download = generateDownloadName(fileName, feats, rules) + '.zip';
+                            a.download = generateDownloadName(fileName, feats, rules, mergedInfo) + '.zip';
                             document.body.appendChild(a); a.click(); document.body.removeChild(a);
                             setTimeout(() => URL.revokeObjectURL(url), 200);
                             setProgress(100, '完成', 'ZIP 文件已下载');
@@ -809,7 +1291,7 @@
                             const blob = new Blob([jsonStr], { type: 'application/json' });
                             const url = URL.createObjectURL(blob);
                             const a = document.createElement('a'); a.href = url;
-                            a.download = generateDownloadName(fileName, feats, rules) + '.json';
+                            a.download = generateDownloadName(fileName, feats, rules, mergedInfo) + '.json';
                             document.body.appendChild(a); a.click(); document.body.removeChild(a);
                             setTimeout(() => URL.revokeObjectURL(url), 200);
                             setProgress(100, '完成', 'JSON 文件已下载');
