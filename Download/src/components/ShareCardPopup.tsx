@@ -8,6 +8,7 @@ import {
     downloadCanvas,
     copyCanvas,
     cardFileName,
+    levelOf,
 } from '../utils/shareCard';
 
 interface ShareCardPopupProps {
@@ -18,19 +19,61 @@ interface ShareCardPopupProps {
 
 const DIFFS = ['EZ', 'HD', 'IN', 'AT'] as const;
 
-/** 从谱面 JSON 统计物量 */
-async function fetchNoteCount(songId: string, diff: string): Promise<number | null> {
+/** 谱面 JSON 里能拿到的东西 */
+interface ChartStats {
+    /** 物量 */
+    notes: number;
+    /** BPM，取第一条判定线 */
+    bpm: number | null;
+    /** 判定线数量 */
+    judgeLines: number;
+    /** 时长（秒），按 1/32 拍换算 */
+    duration: number | null;
+}
+
+/**
+ * 下载并解析一个谱面 JSON。
+ *
+ * 时长换算：谱面里 time 的单位是 1/32 拍，配合判定线 bpm 换算成秒。
+ * 用 Credits(1:38) / Dlyrotz(2:01) 两首比对过实际曲长，误差在几秒内。
+ */
+async function fetchChartStats(
+    songId: string,
+    diff: string
+): Promise<ChartStats | null> {
     try {
         const url = ghRaw(`7aGiven/Phigros_Resource/refs/heads/chart/${songId}.0/${diff}.json`);
         const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) return null;
         const data = await res.json();
-        if (!Array.isArray(data?.judgeLineList)) return null;
-        let n = 0;
-        for (const line of data.judgeLineList) {
-            n += (line?.notesAbove || []).length + (line?.notesBelow || []).length;
+        const lines = data?.judgeLineList;
+        if (!Array.isArray(lines) || lines.length === 0) return null;
+
+        let notes = 0;
+        let lastTime = 0;
+        for (const line of lines) {
+            for (const key of ['notesAbove', 'notesBelow'] as const) {
+                const arr = line?.[key];
+                if (!Array.isArray(arr)) continue;
+                notes += arr.length;
+                for (const n of arr) {
+                    const t = typeof n?.time === 'number' ? n.time : 0;
+                    if (t > lastTime) lastTime = t;
+                }
+            }
         }
-        return n;
+
+        // BPM：各判定线通常一致，取第一条非零的
+        let bpm: number | null = null;
+        for (const line of lines) {
+            const b = typeof line?.bpm === 'number' ? line.bpm : 0;
+            if (b > 0) { bpm = b; break; }
+        }
+
+        // time 单位为 1/32 拍 → 拍数 = lastTime / 32 → 秒 = 拍数 / bpm * 60
+        const duration = bpm && lastTime > 0 ? (lastTime / 32) * (60 / bpm) : null;
+
+        return { notes, bpm, judgeLines: lines.length, duration };
     } catch {
         return null;
     }
@@ -67,6 +110,11 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
     const [status, setStatus] = useState<'idle' | 'building' | 'ready'>('idle');
     const [illuReady, setIlluReady] = useState(false);
     const [noteCounts, setNoteCounts] = useState<Record<string, number>>({});
+    const [chartInfo, setChartInfo] = useState<{ bpm: number | null; judgeLines: number | null; duration: number | null }>({
+        bpm: null,
+        judgeLines: null,
+        duration: null,
+    });
     const [loadingNotes, setLoadingNotes] = useState(false);
     const [tinted, setTinted] = useState(false);
 
@@ -89,6 +137,7 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
         setIlluReady(false);
         setDataUrl(null);
         setNoteCounts({});
+        setChartInfo({ bpm: null, judgeLines: null, duration: null });
         setWithNotes(false);
 
         loadIllustration(song.id).then(img => {
@@ -113,6 +162,7 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
                 illustration: illuRef.current,
                 theme,
                 noteCounts: withNotes ? noteCounts : undefined,
+                chartInfo: withNotes ? chartInfo : undefined,
                 qrText: `https://pcd.bot.cd/?song=${encodeURIComponent(song.id)}`,
             });
             canvasRef.current = canvas;
@@ -122,31 +172,42 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
             console.error('[shareCard] 生成失败', err);
             setStatus('idle');
         }
-    }, [song, illuReady, themeId, withNotes, noteCounts]);
+    }, [song, illuReady, themeId, withNotes, noteCounts, chartInfo]);
 
     useEffect(() => {
         build();
     }, [build]);
 
-    // 开启物量后异步拉取
+    // 勾选后异步拉取：各难度物量 + 曲目级 BPM / 判定线 / 时长
     useEffect(() => {
         if (!withNotes || !song || !isOpen) return;
         let cancelled = false;
         setLoadingNotes(true);
         (async () => {
             const result: Record<string, number> = {};
-            const targets = DIFFS.filter(d => {
-                const k = d as keyof NonNullable<Song['difficulties']>;
-                return !!(song.difficulties?.[k]);
-            });
+            const targets = DIFFS.filter(d => levelOf(song, d) !== null);
+            const statsByDiff: Record<string, ChartStats> = {};
+
             await Promise.all(
                 targets.map(async d => {
-                    const n = await fetchNoteCount(song.id, d);
-                    if (n !== null) result[d] = n;
+                    const s = await fetchChartStats(song.id, d);
+                    if (!s) return;
+                    result[d] = s.notes;
+                    statsByDiff[d] = s;
                 })
             );
+
+            // BPM / 判定线 / 时长属于曲目级信息，优先取最高难度那份
+            const highest = [...DIFFS].reverse().find(d => statsByDiff[d]);
+            const s = highest ? statsByDiff[highest] : null;
+
             if (!cancelled && aliveRef.current) {
                 setNoteCounts(result);
+                setChartInfo({
+                    bpm: s?.bpm ?? null,
+                    judgeLines: s?.judgeLines ?? null,
+                    duration: s?.duration ?? null,
+                });
                 setLoadingNotes(false);
             }
         })();
@@ -228,7 +289,7 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
                         </div>
                     </div>
 
-                    {/* 物量开关 */}
+                    {/* 谱面数据开关 */}
                     <label className="flex items-start gap-3 mb-4 cursor-pointer select-none">
                         <input
                             type="checkbox"
@@ -237,9 +298,9 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
                             className="mt-1 w-4 h-4 accent-cyan-400"
                         />
                         <div>
-                            <div className="text-sm text-slate-200">显示各难度物量（Notes）</div>
+                            <div className="text-sm text-slate-200">显示谱面数据（BPM / 时长 / 判定线 / 物量）</div>
                             <div className="text-xs text-slate-500">
-                                需要下载各难度谱面文件统计，开启后会稍慢一点
+                                需要下载各难度谱面文件解析，开启后会稍慢一点
                             </div>
                         </div>
                     </label>
@@ -260,7 +321,7 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
                         )}
                         {loadingNotes && (
                             <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-xs text-brand-cyan">
-                                正在统计物量…
+                                正在读取谱面…
                             </div>
                         )}
                     </div>

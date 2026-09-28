@@ -222,8 +222,41 @@ export const DIFF_COLORS: Record<string, string> = {
 
 const DIFF_ORDER = ['EZ', 'HD', 'IN', 'AT'];
 
+/** BPM 显示：整数直接显示，小数保留一位 */
+function formatBpm(bpm: number): string {
+    return Number.isInteger(bpm) ? String(bpm) : bpm.toFixed(1);
+}
+
+/** 秒 → m:ss */
+function formatDuration(sec: number): string {
+    const s = Math.max(0, Math.round(sec));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/**
+ * 取某难度的定数，不存在则返回 null。
+ * 上游数据里空值形态很多（缺列、空串、'—'、'?'、0），统一在这里判掉，
+ * 避免把「没有这个难度」当成「难度是 —」渲染出来。
+ */
+export function levelOf(song: Song, diff: string): string | null {
+    const raw = song.difficulties?.[diff as keyof NonNullable<Song['difficulties']>];
+    const s = typeof raw === 'string' ? raw.trim() : '';
+    if (!s || s === '—' || s === '-' || s === '?') return null;
+    const n = parseFloat(s);
+    if (Number.isNaN(n) || n <= 0) return null;
+    return s;
+}
+
 export const CARD_WIDTH = 1080;
 export const CARD_HEIGHT = 1440;
+
+/** 曲目级谱面信息，从谱面 JSON 解析得到 */
+export interface ChartInfo {
+    bpm: number | null;
+    judgeLines: number | null;
+    /** 时长（秒） */
+    duration: number | null;
+}
 
 export interface ShareCardInput {
     song: Song;
@@ -232,6 +265,8 @@ export interface ShareCardInput {
     theme: CardTheme;
     /** 各难度物量，可选；有的话会显示在难度徽章里 */
     noteCounts?: Record<string, number>;
+    /** BPM / 判定线 / 时长，可选 */
+    chartInfo?: ChartInfo;
     /** 二维码内容 */
     qrText: string;
     /** 底部站点名 */
@@ -651,7 +686,7 @@ function drawPill(
 }
 
 export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
-    const { song, illustration, theme, noteCounts, qrText } = input;
+    const { song, illustration, theme, noteCounts, qrText, chartInfo } = input;
     const siteName = input.siteName ?? 'PCD';
     const siteUrl = input.siteUrl ?? 'pcd.bot.cd';
     const glow = theme.glow || theme.accent;
@@ -774,11 +809,14 @@ export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
     const AREA_TOP_MIN = 168;   // 顶部品牌条之下
     const AREA_BOTTOM = H - 56; // 海报内框之内
 
-    // 行集合：有定数或有谱师的难度都列出来，避免谱师信息被丢掉
+    // 行集合：只渲染真实存在定数的难度。
+    // 注意不能拿 charters 兜底——上游 info.tsv 的 AT 列即使没有 AT 难度也常常有值，
+    // 以谱师为准会让没有 AT 的曲子平白多出一行「AT —」。
+    const hasAnyLevel = DIFF_ORDER.some(d => levelOf(song, d) !== null);
     const rows = DIFF_ORDER.filter(d => {
-        const k = d as keyof NonNullable<Song['difficulties']>;
-        const c = song.charters?.[d as keyof Song['charters']];
-        return !!(song.difficulties && song.difficulties[k]) || !!(c && c.trim());
+        if (levelOf(song, d) !== null) return true;
+        // 难度表整体缺失时（接口拉取失败）才退回按谱师列，至少不至于一片空白
+        return !hasAnyLevel && !!(song.charters?.[d as keyof Song['charters']] || '').trim();
     });
     const rowsArea = rows.length ? rows.length * ROW_H + (rows.length - 1) * ROW_GAP : ROW_H;
 
@@ -856,13 +894,16 @@ export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
     const infoX = artX + artSize + 48;
     const infoW = PANEL_X + contentW - INNER - infoX;
 
+    // 有 BPM/判定线/时长时，右栏还要多占一行半，曲名最多排 2 行才放得下
+    const hasMeta = !!(chartInfo?.bpm || chartInfo?.judgeLines || chartInfo?.duration);
+
     // 小标签
     ctx.fillStyle = hexToRgba(theme.accent, 0.9);
     ctx.font = `600 20px ${FONT_STACK}`;
     drawSpacedText(ctx, 'SONG', infoX, artY + 26, 4);
 
     // 曲名：先按 62px 试，装不下就逐级缩小
-    const NAME_MAX_LINES = 3;
+    const NAME_MAX_LINES = hasMeta ? 2 : 3;
     let nameSize = 62;
     let nameLines: string[] = [];
     for (; nameSize >= 30; nameSize -= 2) {
@@ -895,6 +936,31 @@ export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
     sep.addColorStop(1, 'rgba(255,255,255,0)');
     roundRect(ctx, infoX, sepY, infoW, 3, 1.5, sep);
 
+    // BPM / 判定线 / 时长：等距排布的一组数据，勾选后才画
+    const metaY = sepY + 46;
+    const meta = [
+        { label: 'BPM', value: chartInfo?.bpm ? formatBpm(chartInfo.bpm) : null },
+        { label: 'LINES', value: chartInfo?.judgeLines ? String(chartInfo.judgeLines) : null },
+        { label: 'TIME', value: chartInfo?.duration ? formatDuration(chartInfo.duration) : null },
+    ].filter(m => m.value !== null);
+
+    if (meta.length > 0) {
+        // 每格宽度固定，标签与数值左对齐，视觉上成列
+        const colW = Math.min(150, infoW / meta.length);
+        meta.forEach((m, i) => {
+            const mx = infoX + i * colW;
+            ctx.textAlign = 'left';
+            ctx.fillStyle = ink(LIGHT ? 0.45 : 0.38);
+            ctx.font = `600 16px ${FONT_STACK}`;
+            drawSpacedText(ctx, m.label, mx, metaY, 2.5);
+
+            ctx.fillStyle = theme.text;
+            ctx.font = `700 30px ${FONT_MONO}`;
+            ctx.fillText(m.value as string, mx, metaY + 34);
+        });
+        ctx.font = `400 28px ${FONT_STACK}`;
+    }
+
     // 右下角装饰音符（低透明度，仅做底纹，不抢主体）
     ctx.save();
     ctx.globalAlpha = 0.06;
@@ -919,7 +985,7 @@ export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
         const bx = artX;
         const by = rowTop + i * (ROW_H + ROW_GAP);
         const key = d as keyof NonNullable<Song['difficulties']>;
-        const level = song.difficulties?.[key] ?? '—';
+        const level = levelOf(song, d) ?? (song.difficulties?.[key] || '—');
         const charter = (song.charters?.[d as keyof Song['charters']] || '').trim();
         const color = DIFF_COLORS[d] || '#94a3b8';
         const cy = by + ROW_H / 2;
