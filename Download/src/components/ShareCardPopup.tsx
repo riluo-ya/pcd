@@ -117,7 +117,7 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
         duration: null,
     });
     const [loadingNotes, setLoadingNotes] = useState(false);
-    const [tinted, setTinted] = useState(false);
+
 
     // 只要有一项谱面数据被开启，就需要下载谱面文件解析
     const needsChart =
@@ -231,16 +231,39 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
         };
     }, [needsChart, song?.id, isOpen]);
 
-    const handleDownload = () => {
-        if (!canvasRef.current || !song) return;
-        downloadCanvas(canvasRef.current, cardFileName(song));
+    /** 下载按钮的反馈状态：null 为常态 */
+    const [downloadState, setDownloadState] = useState<'saving' | 'done' | 'failed' | null>(null);
+    const [copyState, setCopyState] = useState<'copying' | 'done' | 'failed' | null>(null);
+
+    const flash = (
+        set: (v: 'saving' | 'done' | 'failed' | null) => void,
+        v: 'saving' | 'done' | 'failed' | null
+    ) => {
+        set(v);
+        if (v === 'saving') return;
+        // 成功/失败提示停留一会儿再回到常态，避免状态一闪而过
+        setTimeout(() => {
+            if (aliveRef.current) set(null);
+        }, 1600);
+    };
+
+    const handleDownload = async () => {
+        if (!canvasRef.current || !song || downloadState === 'saving') return;
+        setDownloadState('saving');
+        try {
+            await downloadCanvas(canvasRef.current, cardFileName(song));
+            flash(setDownloadState, 'done');
+        } catch (err) {
+            console.error('[shareCard] 下载失败', err);
+            flash(setDownloadState, 'failed');
+        }
     };
 
     const handleCopy = async () => {
-        if (!canvasRef.current) return;
+        if (!canvasRef.current || copyState === 'copying') return;
+        setCopyState('copying');
         const ok = await copyCanvas(canvasRef.current);
-        setTinted(true);
-        setTimeout(() => setTinted(false), 1800);
+        flash(setCopyState, ok ? 'done' : 'failed');
         if (!ok) {
             // 复制被拒时给出可手动操作的提示
             window.alert('当前浏览器不支持直接复制图片。\n你可以长按预览图保存，或点「下载图片」。');
@@ -335,18 +358,38 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
                     <button
                         type="button"
                         onClick={handleDownload}
-                        disabled={!canvasRef.current}
-                        className="flex-1 min-w-[120px] px-4 py-2.5 font-bold rounded-lg shadow-md transition-colors bg-gradient-to-r from-cyan-400 to-brand-cyan hover:from-cyan-300 hover:to-cyan-400 text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={!canvasRef.current || downloadState === 'saving'}
+                        aria-live="polite"
+                        className="flex-1 min-w-[120px] px-4 py-2.5 font-bold rounded-lg shadow-md transition-colors flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-400 to-brand-cyan hover:from-cyan-300 hover:to-cyan-400 text-slate-900 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                        下载图片
+                        {downloadState === 'saving' && (
+                            <span
+                                aria-hidden="true"
+                                className="inline-block w-3.5 h-3.5 rounded-full border-2 border-slate-900/30 border-t-slate-900 animate-spin"
+                            />
+                        )}
+                        {downloadState === 'saving'
+                            ? '正在下载…'
+                            : downloadState === 'done'
+                                ? '已保存到下载'
+                                : downloadState === 'failed'
+                                    ? '下载失败，重试'
+                                    : '下载图片'}
                     </button>
                     <button
                         type="button"
                         onClick={handleCopy}
-                        disabled={!canvasRef.current}
-                        className="px-4 py-2.5 font-semibold rounded-lg shadow-md transition-colors bg-slate-700 hover:bg-slate-600 text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={!canvasRef.current || copyState === 'copying'}
+                        aria-live="polite"
+                        className="px-4 py-2.5 font-semibold rounded-lg shadow-md transition-colors bg-slate-700 hover:bg-slate-600 text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                        {tinted ? '已尝试复制' : '复制图片'}
+                        {copyState === 'copying'
+                            ? '正在复制…'
+                            : copyState === 'done'
+                                ? '已复制'
+                                : copyState === 'failed'
+                                    ? '复制失败'
+                                    : '复制图片'}
                     </button>
                     <button
                         type="button"

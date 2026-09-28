@@ -103,13 +103,20 @@
         </div>
     </div>
 
+        <!-- 从其他页面被弹到本页时提示：答完题会回哪儿 -->
+    <div id="return-banner" class="container" style="display:none; margin-top:16px; padding:14px 16px; border-radius:10px; background:#12291f; border:1px solid #1f4b34; color:#cbe7d7;">
+        <div style="font-size:0.95rem;">
+            ↩️ 验证通过后会自动返回<span id="return-target-name" style="font-weight:600;"></span>
+        </div>
+    </div>
+
         <!-- 已有有效凭证时的提示条：不阻断答题，由用户自己决定去哪 -->
     <div id="token-banner" class="container" style="display:none; margin-top:16px; padding:14px 16px; border-radius:10px; background:#0f2a3d; border:1px solid #1e4b6b; color:#cbe6f7;">
         <div style="font-size:0.95rem; margin-bottom:10px;">
             ✅ 检测到有效凭证，<span id="token-remain"></span>。您可以直接前往，也可以留在本页重新答题。
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button onclick="location.href='./home.html'" style="padding:8px 16px; background:#2563eb; color:#fff; border:none; border-radius:6px; cursor:pointer;">前往导航中心</button>
+            <button id="token-banner-go" onclick="location.href='./home.html'" style="padding:8px 16px; background:#2563eb; color:#fff; border:none; border-radius:6px; cursor:pointer;">前往导航中心</button>
             <button onclick="clearTokenAndStay()" style="padding:8px 16px; background:#4b5563; color:#fff; border:none; border-radius:6px; cursor:pointer;">清除凭证并重新答题</button>
         </div>
     </div>
@@ -229,6 +236,91 @@
         })();
 
         // ================= Token 检查与跳转 =================
+
+        // ---- 返回地址（return_to）----
+        // 用户往往是从某个具体页面被弹到这里的（比如扫码打开的下载器 ?song=xxx），
+        // 答完题应该回到他原本要去的地方，而不是一律落到导航中心。
+        const RETURN_KEY = 'pcd_return_to';
+        const RETURN_PENDING_KEY = 'pcd_return_pending';
+
+        // 允许回跳的页面（新增受保护页面时记得同步这里）。
+        // 用白名单而不是「同源即可」，是因为任意字符串都会被 URL 解析成同源相对路径，
+        // 放行的话会把用户送到一个不存在的地址上。
+        const ALLOWED_PATHS = ['', 'index.html', 'home.html', 'philzy.html', 'pmth.html'];
+
+        /**
+         * 校验返回地址是否可信：
+         * - 只接受同源的 http(s) 地址，避免被构造成开放重定向
+         * - 只接受白名单内的页面；答题页本身不在其中，
+         *   否则目标页加载失败时会形成「弹回 → 答完 → 再弹回」死循环
+         */
+        function normalizeReturnTo(raw) {
+            if (!raw) return null;
+            let url;
+            try {
+                url = new URL(raw, location.href);
+            } catch (e) {
+                return null;
+            }
+            if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+            if (url.origin !== location.origin) return null;
+            const file = url.pathname.split('/').pop();
+            if (ALLOWED_PATHS.indexOf(file) === -1) return null;
+            return url.href;
+        }
+
+        let returnTo = null;
+
+        /** 收集来源地址（各页面跳转时用 ?return_to= 传入），存下来以便刷新后仍有效 */
+        function collectReturnTo() {
+            const raw = new URLSearchParams(location.search).get('return_to');
+            const target = normalizeReturnTo(raw);
+            try {
+                if (target) localStorage.setItem(RETURN_KEY, target);
+            } catch (e) { /* 存储不可用时忽略 */ }
+            return target;
+        }
+
+        /**
+         * 决定答完题后去哪。调用即消费（清除记录），避免下次带着旧地址乱跳。
+         * 若上次回跳没落地成功（目标页又把用户弹了回来），这次直接去导航中心。
+         */
+        function resolveRedirectTarget() {
+            let saved = null;
+            let pending = null;
+            try {
+                saved = localStorage.getItem(RETURN_KEY);
+                pending = localStorage.getItem(RETURN_PENDING_KEY);
+                localStorage.removeItem(RETURN_KEY);
+            } catch (e) {
+                return './home.html';
+            }
+
+            const target = normalizeReturnTo(saved);
+            if (!target || pending === target) {
+                try { localStorage.removeItem(RETURN_PENDING_KEY); } catch (e) {}
+                return './home.html';
+            }
+            try { localStorage.setItem(RETURN_PENDING_KEY, target); } catch (e) {}
+            return target;
+        }
+
+        /** 把地址翻译成人话，仅用于提示文案 */
+        function describeTarget(url) {
+            if (!url) return '';
+            try {
+                const u = new URL(url, location.href);
+                const file = u.pathname.split('/').pop();
+                if (!file || file === 'index.html') return '谱面下载器';
+                if (file === 'home.html') return '导航中心';
+                if (file === 'philzy.html') return '蓝奏云下载页';
+                if (file === 'pmth.html') return '谱面工坊';
+                return file;
+            } catch (e) {
+                return '';
+            }
+        }
+
         /**
          * 注意：这里必须做「完整校验」（时间戳 + 签名），不能只查时间戳。
          * 否则一个签名被破坏但时间有效的残留 token 会让本页误判为「已验证」
@@ -277,6 +369,8 @@
         let isPerformingAutoSwitch = false;
 
         document.addEventListener('DOMContentLoaded', () => {
+            returnTo = collectReturnTo();
+            showReturnBanner();
             if (checkTokenAndRedirect()) return;
             checkFreezeStatus();
         });
@@ -666,8 +760,11 @@
                 if (allCorrect) {
                     clearFreezeState();
                     await generateAndSaveToken();
-                    showModal('恭喜！', '答题正确，即将跳转...', 1500, () => {
-                        location.href = './home.html';
+                    // 先算好目标（会消费掉记录的来源地址），再弹提示
+                    const target = resolveRedirectTarget();
+                    const label = describeTarget(target);
+                    showModal('恭喜！', label ? `答题正确，正在返回${label}...` : '答题正确，即将跳转...', 1500, () => {
+                        location.href = target;
                     });
                 } else {
                     incrementFailureCount();
@@ -739,7 +836,26 @@
             if (!banner) return;
             const leftMin = Math.max(0, Math.floor((TOKEN_VALID_MS - (Date.now() - ts)) / 60000));
             if (remainEl) remainEl.textContent = '剩余约 ' + leftMin + ' 分钟';
+
+            // 带来源地址时，把「前往导航中心」换成返回原页面
+            const goBtn = document.getElementById('token-banner-go');
+            if (goBtn && returnTo) {
+                const label = describeTarget(returnTo);
+                goBtn.textContent = label ? `返回${label}` : '返回原页面';
+                goBtn.onclick = () => { location.href = returnTo; };
+            }
+
             banner.style.display = 'block';
+        }
+
+        /** 提示：答完题会回到哪个页面 */
+        function showReturnBanner() {
+            if (!returnTo) return;
+            const banner = document.getElementById('return-banner');
+            const nameEl = document.getElementById('return-target-name');
+            const label = describeTarget(returnTo);
+            if (nameEl) nameEl.textContent = label ? `「${label}」` : '原页面';
+            if (banner) banner.style.display = 'block';
         }
 
         /** 清除凭证并留在本页重新答题 */

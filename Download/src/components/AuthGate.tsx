@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { verifyToken, redirectToQuiz } from '../utils/auth';
+import { verifyToken, redirectToQuiz, clearReturnPending } from '../utils/auth';
 
 interface AuthGateProps {
     children: React.ReactNode;
@@ -18,6 +18,8 @@ export const AuthGate: React.FC<AuthGateProps> = ({ children }) => {
     useEffect(() => {
         const result = verifyToken();
         if (result.valid) {
+            // 告诉答题页：这次从答题页回跳已经成功落地，下次可以继续回跳
+            clearReturnPending();
             setIsVerified(true);
         } else {
             setErrorMsg(result.reason || '验证失败');
@@ -46,7 +48,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({ children }) => {
                     <div style={lockIconStyle}>🔒</div>
                     <h2 style={titleStyle}>访问受限</h2>
                     <p style={errorTextStyle}>{errorMsg}</p>
-                    <p style={hintStyle}>请先完成答题验证后再访问此页面。</p>
+                    <p style={hintStyle}>请先完成答题验证，通过后会自动返回本页。</p>
                     <button
                         onClick={() => redirectToQuiz()}
                         style={buttonStyle}

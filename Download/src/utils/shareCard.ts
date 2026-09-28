@@ -1134,20 +1134,28 @@ export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
 }
 
 /** 触发 canvas 下载 */
-export function downloadCanvas(canvas: HTMLCanvasElement, filename: string): void {
-    canvas.toBlob(blob => {
-        if (!blob) {
-            throw new Error('图片生成失败');
-        }
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 1200);
-    }, 'image/png');
+/**
+ * 触发 canvas 下载。
+ * 返回 Promise，图片编码完成后 resolve，便于调用方显示「正在下载…」之类的状态。
+ */
+export function downloadCanvas(canvas: HTMLCanvasElement, filename: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        canvas.toBlob(blob => {
+            if (!blob) {
+                reject(new Error('图片生成失败'));
+                return;
+            }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1200);
+            resolve();
+        }, 'image/png');
+    });
 }
 
 /** 复制图片到剪贴板（不支持时返回 false，由调用方降级提示） */

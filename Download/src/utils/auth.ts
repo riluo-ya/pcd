@@ -74,8 +74,35 @@ export function clearToken(): void {
     localStorage.removeItem(TOKEN_KEY);
 }
 
-/** 清除 token 并跳转到答题页 */
+/**
+ * 答题页用这个 key 记住「上次回跳的目标」。
+ * 目标页验证通过后必须清掉，否则答题页会认为上次回跳没成功。
+ */
+const RETURN_PENDING_KEY = 'pcd_return_pending';
+
+/**
+ * 标记本次回跳已成功落地。
+ * 由各受保护页面在验证通过后调用；不清除的话，下次答题会放弃回跳。
+ */
+export function clearReturnPending(): void {
+    try {
+        localStorage.removeItem(RETURN_PENDING_KEY);
+    } catch (e) {
+        /* localStorage 不可用时忽略 */
+    }
+}
+
+/**
+ * 清除 token 并跳转到答题页。
+ * 会把当前地址一并带过去，答完题后就能回到原来要去的地方
+ * （例如扫码打开的 ?song=xxx），而不是一律落到导航中心。
+ */
 export function redirectToQuiz(): void {
     clearToken();
-    window.location.href = './quiz.html';
+    const back = window.location.href;
+    try {
+        window.location.href = `./quiz.html?return_to=${encodeURIComponent(back)}`;
+    } catch (e) {
+        window.location.href = './quiz.html';
+    }
 }
