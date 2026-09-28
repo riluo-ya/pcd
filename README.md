@@ -36,8 +36,9 @@ pcd/
 而不是一律落到导航中心。典型场景：扫码打开 `https://pcd.bot.cd/?song=xxx` →
 凭证失效被拦 → 答完题直接回到那首歌的下载页。
 
+- 只看当前链接的 `?return_to=`，不读任何本地存储：地址栏里没有就当作没有，不会出现残留的跳转目标。
 - 只接受同源、且属于白名单页面（`index.html` / `home.html` / `philzy.html` / `pmth.html`）的返回地址，答题页自身不在其中，避免「弹回 → 答完 → 再弹回」死循环。
-- 新增受保护页面时，需同步 `quiz.html` 里的 `ALLOWED_PATHS`，并在该页验证通过后清除 `pcd_return_pending`（否则答题页会判定上次回跳失败）。
+- 新增受保护页面时，需同步 `quiz.html` 里的 `ALLOWED_PATHS`。
 
 ## 本地预览
 
