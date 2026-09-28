@@ -75,14 +75,41 @@ export function clearToken(): void {
 }
 
 /**
+ * 计算答完题后要回哪：null 表示不回跳（答题页会走默认的导航中心）。
+ *
+ * 下载站只在「分享链接」时才值得原路返回 —— 也就是带 ?song= 的那类地址，
+ * 用户扫码就是为了看这一首。单纯被拦的下载站首页没有具体内容，
+ * 送去导航中心更合适：从那儿能进谱面下载器，也不会困在空白曲库上。
+ */
+function buildReturnTarget(): string | null {
+    try {
+        const url = new URL(window.location.href);
+        const file = url.pathname.split('/').pop();
+        const isDownloader = file === '' || file === 'index.html';
+        if (isDownloader && !url.searchParams.get('song')) return null;
+        return url.href;
+    } catch (e) {
+        return null;
+    }
+}
+
+/** 答完题是否会自动回到当前页，供界面提示文案使用 */
+export function willReturnAfterQuiz(): boolean {
+    return buildReturnTarget() !== null;
+}
+
+/**
  * 清除 token 并跳转到答题页。
- * 会把当前地址一并带过去，答完题后就能回到原来要去的地方
- * （例如扫码打开的 ?song=xxx），而不是一律落到导航中心。
+ * 值得原路返回时才带 return_to（例如扫码打开的 ?song=xxx），
+ * 否则直接去答题页，答完由它落到导航中心。
  */
 export function redirectToQuiz(): void {
     clearToken();
+    const back = buildReturnTarget();
     try {
-        window.location.href = `./quiz.html?return_to=${encodeURIComponent(window.location.href)}`;
+        window.location.href = back
+            ? `./quiz.html?return_to=${encodeURIComponent(back)}`
+            : './quiz.html';
     } catch (e) {
         window.location.href = './quiz.html';
     }

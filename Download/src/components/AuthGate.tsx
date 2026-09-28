@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { verifyToken, redirectToQuiz } from '../utils/auth';
+import { verifyToken, redirectToQuiz, willReturnAfterQuiz } from '../utils/auth';
 
 interface AuthGateProps {
     children: React.ReactNode;
@@ -14,6 +14,8 @@ export const AuthGate: React.FC<AuthGateProps> = ({ children }) => {
     const [isVerified, setIsVerified] = useState<boolean>(false);
     const [errorMsg, setErrorMsg] = useState<string>('');
     const [isChecking, setIsChecking] = useState<boolean>(true);
+    // 分享链接（?song=xxx）答完题会回到本页，直接访问的首页则会去导航中心
+    const [willReturn, setWillReturn] = useState<boolean>(false);
 
     useEffect(() => {
         const result = verifyToken();
@@ -21,6 +23,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({ children }) => {
             setIsVerified(true);
         } else {
             setErrorMsg(result.reason || '验证失败');
+            setWillReturn(willReturnAfterQuiz());
         }
         setIsChecking(false);
     }, []);
@@ -46,7 +49,10 @@ export const AuthGate: React.FC<AuthGateProps> = ({ children }) => {
                     <div style={lockIconStyle}>🔒</div>
                     <h2 style={titleStyle}>访问受限</h2>
                     <p style={errorTextStyle}>{errorMsg}</p>
-                    <p style={hintStyle}>请先完成答题验证，通过后会自动返回本页。</p>
+                    <p style={hintStyle}>
+                        请先完成答题验证，通过后
+                        {willReturn ? '会自动返回本页' : '会自动前往导航中心'}。
+                    </p>
                     <button
                         onClick={() => redirectToQuiz()}
                         style={buttonStyle}

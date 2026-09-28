@@ -264,15 +264,40 @@
             return url.href;
         }
 
+        /** 判断一个地址是不是下载站首页（根路径或 index.html） */
+        function isDownloaderUrl(url) {
+            const file = url.pathname.split('/').pop();
+            return file === '' || file === 'index.html';
+        }
+
+        /**
+         * 下载站只在「分享链接」时才值得原路返回 —— 也就是带 ?song= 的那类地址，
+         * 用户扫码就是为了看这一首。
+         * 单纯被拦的下载站首页没有具体内容，答完题送去导航中心更合适：
+         * 从那儿能直接选谱面下载器，也不会让人困在一个空白的曲库列表上。
+         */
+        function shouldReturnTo(target) {
+            if (!target) return false;
+            let url;
+            try {
+                url = new URL(target, location.href);
+            } catch (e) {
+                return false;
+            }
+            if (isDownloaderUrl(url) && !url.searchParams.get('song')) return false;
+            return true;
+        }
+
         /** 直接从当前链接取来源；没有就返回 null（答完题走默认的导航中心） */
         function readReturnTo() {
             const raw = new URLSearchParams(location.search).get('return_to');
             return normalizeReturnTo(raw);
         }
 
-        /** 答完题去哪：有可信来源就回去，否则沿用原来的导航中心 */
+        /** 答完题去哪：可信来源就回去，否则沿用原来的导航中心 */
         function resolveRedirectTarget() {
-            return readReturnTo() || './home.html';
+            const target = readReturnTo();
+            return shouldReturnTo(target) ? target : './home.html';
         }
 
         /** 把地址翻译成人话，仅用于提示文案 */
