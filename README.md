@@ -30,6 +30,15 @@ pcd/
 2. **home.html / philzy.html / pmth.html**：页面加载时验证 token，无效则显示「访问受限」弹窗，点击「返回答题页」清除 token 并跳转 quiz.html。
 3. **Download/（谱面下载器）**：通过 `AuthGate` 组件验证 token，无效则显示全屏受限页面，点击「前往答题页」跳转 quiz.html。
 
+### 验证后返回原页面
+
+被拦截时，页面会把当前地址通过 `?return_to=` 传给答题页，答完后自动跳回去，
+而不是一律落到导航中心。典型场景：扫码打开 `https://pcd.bot.cd/?song=xxx` →
+凭证失效被拦 → 答完题直接回到那首歌的下载页。
+
+- 只接受同源、且属于白名单页面（`index.html` / `home.html` / `philzy.html` / `pmth.html`）的返回地址，答题页自身不在其中，避免「弹回 → 答完 → 再弹回」死循环。
+- 新增受保护页面时，需同步 `quiz.html` 里的 `ALLOWED_PATHS`，并在该页验证通过后清除 `pcd_return_pending`（否则答题页会判定上次回跳失败）。
+
 ## 本地预览
 
 ### 方式一：完整打包预览（推荐，模拟线上环境）
