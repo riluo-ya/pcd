@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { verifyToken, redirectToQuiz, clearReturnPending } from '../utils/auth';
+import { verifyToken, redirectToQuiz } from '../utils/auth';
 
 interface AuthGateProps {
     children: React.ReactNode;
@@ -18,8 +18,6 @@ export const AuthGate: React.FC<AuthGateProps> = ({ children }) => {
     useEffect(() => {
         const result = verifyToken();
         if (result.valid) {
-            // 告诉答题页：这次从答题页回跳已经成功落地，下次可以继续回跳
-            clearReturnPending();
             setIsVerified(true);
         } else {
             setErrorMsg(result.reason || '验证失败');
