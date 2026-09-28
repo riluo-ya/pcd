@@ -11,6 +11,7 @@ import { SettingsPopup } from './components/SettingsPopup';
 import { SourcePopup } from './components/SourcePopup';
 import { FAQPopup } from './components/FAQPopup';
 import { AboutPopup } from './components/AboutPopup';
+import { ShareCardPopup } from './components/ShareCardPopup';
 import { useSettings } from './contexts/SettingsContext';
 import { AudioVisualizer } from './components/AudioVisualizer';
 import { getSongEffect } from './song-effects';
@@ -52,6 +53,7 @@ const App: React.FC = () => {
     const [isFaqOpen, setIsFaqOpen] = useState(false);
     const [isAboutOpen, setIsAboutOpen] = useState(false);
     const [isSourceOpen, setIsSourceOpen] = useState(false);
+    const [isShareCardOpen, setIsShareCardOpen] = useState(false);
     
     const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -432,6 +434,13 @@ const App: React.FC = () => {
             {isSettingsOpen && <SettingsPopup isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />}
             {isFaqOpen && <FAQPopup isOpen={isFaqOpen} onClose={() => setIsFaqOpen(false)} />}
             {isAboutOpen && <AboutPopup isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />}
+            {isShareCardOpen && (
+                <ShareCardPopup
+                    song={selectedSong}
+                    isOpen={isShareCardOpen}
+                    onClose={() => setIsShareCardOpen(false)}
+                />
+            )}
             {isSourceOpen && <SourcePopup isOpen={isSourceOpen} onClose={() => setIsSourceOpen(false)} />}
             {blacklistWarning && (
                 <BlacklistWarningPopup 
@@ -667,13 +676,26 @@ const App: React.FC = () => {
                                                     '导出全部资源'
                                                 )}
                                                 {exportState.type === 'phira' && (
-                                                    <div 
+                                                    <div
                                                         className="absolute bottom-0 left-0 h-0.5 bg-brand-cyan/75 transition-all duration-150"
                                                         style={{ width: `${exportState.progress.toFixed(0)}%` }}
                                                     />
                                                 )}
                                             </button>
                                         </div>
+                                    </div>
+                                )}
+
+                                {/* 谱面分享卡片入口：选中歌曲后即可生成 */}
+                                {selectedSong && (
+                                    <div className="mt-5 flex justify-center">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsShareCardOpen(true)}
+                                            className="px-5 py-2.5 font-bold rounded-lg shadow-md transition-colors duration-200 flex items-center justify-center bg-cyan-700 hover:bg-cyan-800 text-white"
+                                        >
+                                            生成分享卡片
+                                        </button>
                                     </div>
                                 )}
                            </div>
