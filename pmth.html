@@ -1365,21 +1365,17 @@
                 }
 
                 /**
-                 * 生成输出文件名：**歌曲名 + 难度标识**，不再堆叠一堆参数后缀。
+                 * 生成输出文件名：**歌曲名 + 标识**，不再堆叠一堆参数后缀。
                  *
-                 * 标识规则（全部转成某类音符 / 随机 / 整合 / 自定义映射）：
-                 *   AT 全部 Tap · AD 全部 Drag · AH 全部 Hold · AF 全部 Flick
-                 *   AR 随机 · AM 整合 · AX 自定义映射
-                 * 没做任何转换时保留该谱面原本的难度（如 IN）。
+                 * 全部转成某类记「ALL TAP / ALL DRAG / ALL HOLD / ALL FLICK」，
+                 * 随机记 RANDOM，整合记 MIXTURE，自定义映射记 AX。
+                 * 没做转换时保留谱面原本的难度（如 IN）。
                  */
                 function outputTag(rules, feats, mergedInfo, fallback) {
-                    if (mergedInfo) return 'AM';
-                    if (feats && feats.random) return 'AR';
+                    if (mergedInfo) return MIX_TAG;
+                    if (feats && feats.random) return 'RANDOM';
                     const g = (rules && rules.global) || 0;
-                    if (g > 0) {
-                        const tagMap = { 1: 'AT', 2: 'AD', 3: 'AH', 4: 'AF' };
-                        return tagMap[g] || ('A' + g);
-                    }
+                    if (g > 0) return ALL_TYPE_TAG[g] || ('all' + g);
                     if (rules && rules.map && Object.keys(rules.map).length > 0) return 'AX';
                     return fallback || '';
                 }
@@ -1417,16 +1413,24 @@
                 }
 
                 /**
-                 * 算出处理后的难度标识。
-                 * 1=Tap, 2=Drag, 3=Hold, 4=Flick —— 全部转成某类时记 AT / AD / AH / AF，
-                 * 随机记 AR，整合记 MIX-<参与难度>，自定义映射记 AX。
+                 * 全部转换成某类音符时的标识（全大写）。
+                 * 1=Tap, 2=Drag, 3=Hold, 4=Flick —— 对应 ALL TAP / ALL DRAG / ALL HOLD / ALL FLICK。
+                 */
+                const ALL_TYPE_TAG = { 1: 'ALL TAP', 2: 'ALL DRAG', 3: 'ALL HOLD', 4: 'ALL FLICK' };
+
+                /** 整合混排的标识 */
+                const MIX_TAG = 'MIXTURE';
+
+                /**
+                 * 算出处理后写入 info.txt / info.yml 的难度标识。
+                 * 全部转成某类记「ALL XXX」，随机记 RANDOM，
+                 * 整合记 MIXTURE，自定义映射记 AX。
                  */
                 function computeLevelTag(rules, feats, mergedInfo) {
-                    if (mergedInfo) return 'MIX-' + mergedInfo.labels.join('');
-                    if (feats && feats.random) return 'AR';
+                    if (mergedInfo) return MIX_TAG;
+                    if (feats && feats.random) return 'RANDOM';
                     const g = (rules && rules.global) || 0;
-                    const diffMap = { 1: 'AT', 2: 'AD', 3: 'AH', 4: 'AF' };
-                    if (g > 0) return diffMap[g] || null;
+                    if (g > 0) return ALL_TYPE_TAG[g] || null;
                     if (rules && rules.map && Object.keys(rules.map).length > 0) return 'AX';
                     return null;
                 }
@@ -1434,13 +1438,18 @@
                 function applyDifficultyToInfo(infoContent, rules, feats, mergedInfo) {
                     const newDiff = computeLevelTag(rules, feats, mergedInfo);
                     if (!newDiff) return infoContent;
-                    return infoContent.replace(/^(Level:\s*)\S+(\s*.*)$/m, `$1${newDiff}$2`);
+                    // 标识可能含空格（ALL TAP），所以按「Lv. 及之后」切分，
+                    // 只替换它前面的部分 —— 否则对已处理过的文件再跑一次会叠成 "ALL ALL TAP"
+                    return infoContent.replace(/^(Level:[ \t]*)(.*)$/m, (m, prefix, body) => {
+                        const lm = String(body).match(/\s+Lv\..*$/);
+                        return prefix + newDiff + (lm ? lm[0] : '');
+                    });
                 }
 
                 /**
                  * 改写 info.yml 的 level 字段。
                  * yml 与 txt 作用相同，之前只改了 txt，导致包内两个文件对不上。
-                 * 只替换等级串的第一个词（如 "AT Lv.17" → "MIX-EZHDINAT Lv.17"），
+                 * 只替换等级串里 Lv. 之前的部分（如 "AT Lv.17" → "MIXTURE Lv.17"），
                  * 保留后面的 Lv. 数值；引号样式（有/无）保持原样。
                  */
                 function applyDifficultyToYml(ymlContent, rules, feats, mergedInfo) {
@@ -1449,7 +1458,9 @@
                     return ymlContent.replace(/^([ \t]*level:[ \t]*)(?:"([^"\n]*)"|'([^'\n]*)'|([^\n]*))$/m,
                         (m, prefix, dq, sq, bare) => {
                             const raw = dq !== undefined ? dq : (sq !== undefined ? sq : bare);
-                            const rest = String(raw).replace(/^\S+/, '').trim();
+                            // 同样按 Lv. 切分，保证重复处理不会叠加
+                            const lm = String(raw).match(/\s+Lv\..*$/);
+                            const rest = lm ? lm[0].trim() : '';
                             const val = rest ? (newDiff + ' ' + rest) : newDiff;
                             if (dq !== undefined) return prefix + '"' + val + '"';
                             if (sq !== undefined) return prefix + "'" + val + "'";
