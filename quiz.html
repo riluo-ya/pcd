@@ -167,7 +167,7 @@
         const MAX_FAILURES = 5;
         const TARGET_MD5 = MD5('riluoya');
         const SESSION_INFO_KEY = 'current_session_info';
-        const TOKEN_VALID_MS = 60 * 60 * 1000;
+        const TOKEN_VALID_MS = 12 * 60 * 60 * 1000; // 有效期 12 小时
 
         let sessionTimerInterval = null;
         let sessionStartTime = 0;
@@ -823,13 +823,24 @@
             location.reload();
         };
 
+        /** 把剩余毫秒格式化成「约 X 小时 Y 分钟」，不足 1 小时只显示分钟 */
+        function formatRemain(ms) {
+            // 已过期或异常值时归零，避免出现「剩余约 -1 分钟」
+            const totalMin = Math.max(0, Math.floor(ms / 60000));
+            if (totalMin < 60) return '剩余约 ' + totalMin + ' 分钟';
+            const h = Math.floor(totalMin / 60);
+            const m = totalMin % 60;
+            return m === 0 ? '剩余约 ' + h + ' 小时' : '剩余约 ' + h + ' 小时 ' + m + ' 分钟';
+        }
+
         /** 显示「已有有效凭证」提示条，不阻断答题 */
         function showTokenBanner(ts) {
             const banner = document.getElementById('token-banner');
             const remainEl = document.getElementById('token-remain');
             if (!banner) return;
-            const leftMin = Math.max(0, Math.floor((TOKEN_VALID_MS - (Date.now() - ts)) / 60000));
-            if (remainEl) remainEl.textContent = '剩余约 ' + leftMin + ' 分钟';
+            // 12 小时有效期下，只显示分钟会变成「720 分钟」，超过 1 小时改用小时
+            const leftMs = Math.max(0, TOKEN_VALID_MS - (Date.now() - ts));
+            if (remainEl) remainEl.textContent = formatRemain(leftMs);
 
             // 带来源地址时，把「前往导航中心」换成返回原页面
             const goBtn = document.getElementById('token-banner-go');
