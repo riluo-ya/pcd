@@ -503,6 +503,11 @@
                     { value: 3, label: '长条 (Hold)' }
                 ];
                 let chartData = null, fileName = 'chart.json', statsCache = null;
+                // 当前主谱面的输出扩展名。导入 .pez 就必须导出 .pez，
+                // 否则 Phira 认不出来（.pez 本质就是改了扩展名的 zip）
+                let currentExt = '.json';
+                // 当前主谱面的歌曲名与原始难度，供输出命名使用
+                let currentSong = '', currentDiff = '';
                 let zipImportData = null, zipJsonPath = null, isZipImport = false;
 
                 const $ = s => document.querySelector(s);
@@ -641,6 +646,8 @@
                         id: 'c' + (nextChartId++),
                         name: name,
                         srcName: name,
+                        ext: null,
+                        songName: '',
                         label: guessLabel(name, charts.length),
                         data: data,
                         zip: zip || null,
@@ -669,7 +676,11 @@
                     if (mi < 0) { mi = 0; charts[0].isMain = true; }
                     const main = charts[mi];
                     chartData = main.data;
-                    fileName = main.name;
+                    // 文件名用 srcName：name 可能带「 · 」和空格，不适合做文件名
+                    fileName = main.srcName || main.name;
+                    currentExt = main.ext || outputExt(main.srcName || main.name);
+                    currentSong = main.songName || main.srcName || main.name;
+                    currentDiff = main.label || '';
                     resetZipState();
                     if (main.zip) { zipImportData = main.zip.buf; zipJsonPath = main.zip.jsonPath; isZipImport = true; }
                     fileChip.classList.add('show');
@@ -754,7 +765,11 @@
                         const reader = new FileReader();
                         reader.onerror = () => { showToast('❌', '读取失败', '无法读取 ' + file.name); resolve(false); };
                         reader.onload = ev => {
-                            try { resolve(!!addChart(file.name, JSON.parse(ev.target.result), null)); }
+                            try {
+                                const item = addChart(file.name, JSON.parse(ev.target.result), null);
+                                if (item) { item.ext = '.json'; item.songName = baseNoExt(file.name); }
+                                resolve(!!item);
+                            }
                             catch (err) { showToast('❌', '解析失败', file.name + ' JSON 无效: ' + err.message); resolve(false); }
                         };
                         reader.readAsText(file);
@@ -820,7 +835,7 @@
                  * 支持「压缩包套压缩包」：外层按歌曲分目录，内层每难度一个 .pez / .zip。
                  * 判定方式很直接 —— 能解析出谱面就当谱面包收下，否则当容器继续往下挖。
                  */
-                async function scanZip(buffer, songHint, depth, out) {
+                async function scanZip(buffer, songHint, depth, out, extHint) {
                     if (depth > 4) { console.warn('[scanZip] 嵌套过深，已停止'); return 0; }
                     let zip;
                     try { zip = await JSZip.loadAsync(buffer); }
@@ -861,8 +876,10 @@
                                 buf: buffer,
                                 jsonPath: asChart.jsonPath,
                                 song: asChart.infoName || songHint || '',
+                                songName: asChart.infoName || songHint || '',
                                 diff: asChart.infoDiff || guessLabel(songHint || '', 0),
                                 path: songHint || '',
+                                ext: extHint || '.pez',
                             });
                             return 1;
                         }
@@ -876,7 +893,8 @@
                             // 歌曲名优先取所在目录名，其次是内层文件名
                             const song = topDirName(rel) || baseNoExt(rel) || songHint || '';
                             const sub = await e.async('arraybuffer');
-                            n += await scanZip(sub, song, depth + 1, out);
+                            n += await scanZip(sub, song, depth + 1, out,
+                                lower.endsWith('.pez') ? '.pez' : '.zip');
                         } else if (lower.endsWith('.json')) {
                             try {
                                 const data = JSON.parse(await e.async('text'));
@@ -886,8 +904,10 @@
                                         buf: null,
                                         jsonPath: null,
                                         song: topDirName(rel) || songHint || '',
+                                        songName: topDirName(rel) || songHint || '',
                                         diff: guessLabel(rel, 0),
                                         path: rel,
+                                        ext: '.json',
                                     });
                                     n++;
                                 }
@@ -901,7 +921,7 @@
                     try {
                         const arrayBuffer = await file.arrayBuffer();
                         const found = [];
-                        const n = await scanZip(arrayBuffer, baseNoExt(file.name), 0, found);
+                        const n = await scanZip(arrayBuffer, baseNoExt(file.name), 0, found, outputExt(file.name));
                         if (n === 0) { showToast('❌','ZIP 内无谱面','未找到有效的谱面文件'); return false; }
 
                         let ok = 0;
@@ -915,6 +935,8 @@
                             );
                             if (item) {
                                 item.srcName = f.song ? (f.song + '_' + (f.diff || '')) : (f.diff || 'chart');
+                                item.ext = f.ext || '.json';
+                                item.songName = f.songName || f.song || '';
                                 if (f.diff) item.label = f.diff;
                                 item.group = f.song || '';
                                 ok++;
@@ -1342,22 +1364,30 @@
                     return newData;
                 }
 
-                function generateDownloadName(baseName, feats, rules, mergedInfo) {
-                    const base = baseName.replace(/\.(json|zip|pez)$/i, '');
-                    const tags = [];
-                    if (mergedInfo) {
-                        tags.push('mix' + mergedInfo.labels.join(''));
-                        tags.push(mergedInfo.mode === 'even' ? 'even' : 'rand');
-                        tags.push('s' + mergedInfo.segments);
+                /**
+                 * 生成输出文件名：**歌曲名 + 难度标识**，不再堆叠一堆参数后缀。
+                 *
+                 * 标识规则（全部转成某类音符 / 随机 / 整合 / 自定义映射）：
+                 *   AT 全部 Tap · AD 全部 Drag · AH 全部 Hold · AF 全部 Flick
+                 *   AR 随机 · AM 整合 · AX 自定义映射
+                 * 没做任何转换时保留该谱面原本的难度（如 IN）。
+                 */
+                function outputTag(rules, feats, mergedInfo, fallback) {
+                    if (mergedInfo) return 'AM';
+                    if (feats && feats.random) return 'AR';
+                    const g = (rules && rules.global) || 0;
+                    if (g > 0) {
+                        const tagMap = { 1: 'AT', 2: 'AD', 3: 'AH', 4: 'AF' };
+                        return tagMap[g] || ('A' + g);
                     }
-                    if (feats.random) {
-                        tags.push('random');
-                    } else {
-                        const { global, map } = rules;
-                        if (global > 0) tags.push('all' + (typeNames[global] || global));
-                        else if (Object.keys(map).length) tags.push('mod');
-                    }
-                    return base + (tags.length ? '_' + tags.join('_') : '_processed');
+                    if (rules && rules.map && Object.keys(rules.map).length > 0) return 'AX';
+                    return fallback || '';
+                }
+
+                function generateDownloadName(songName, feats, rules, mergedInfo, fallback) {
+                    const base = String(songName || '').replace(/\.(json|zip|pez)$/i, '').trim();
+                    const tag = outputTag(rules, feats, mergedInfo, fallback);
+                    return base + (tag ? '_' + tag : '');
                 }
 
                 /**
@@ -1369,23 +1399,14 @@
                     const jsonStr = JSON.stringify(data);
                     if (chart && chart.zip && chart.zip.buf && chart.zip.jsonPath) {
                         const zip = await JSZip.loadAsync(chart.zip.buf);
-                        let infoFile = zip.file('info.txt') || zip.file('Info.txt') || zip.file('INFO.TXT');
-                        if (!infoFile) {
-                            zip.forEach((path, entry) => {
-                                if (!entry.dir && path.toLowerCase() === 'info.txt') infoFile = entry;
-                            });
-                        }
-                        if (infoFile) {
-                            const infoContent = await infoFile.async('text');
-                            zip.file(infoFile.name, applyDifficultyToInfo(infoContent, rules, feats, mergedInfo));
-                        }
+                        await syncInfoFiles(zip, rules, feats, mergedInfo);
                         zip.file(chart.zip.jsonPath, jsonStr);
                         const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
-                        return { blob: blob, ext: outputExt(chart.srcName || chart.name) };
+                        return { blob: blob, ext: chart.ext || outputExt(chart.srcName || chart.name) };
                     }
                     return {
                         blob: new Blob([jsonStr], { type: 'application/json' }),
-                        ext: outputExt(chart ? (chart.srcName || chart.name) : 'chart.json')
+                        ext: (chart && chart.ext) || '.json'
                     };
                 }
 
@@ -1395,24 +1416,74 @@
                     return m ? m[0].toLowerCase() : '.json';
                 }
 
+                /**
+                 * 算出处理后的难度标识。
+                 * 1=Tap, 2=Drag, 3=Hold, 4=Flick —— 全部转成某类时记 AT / AD / AH / AF，
+                 * 随机记 AR，整合记 MIX-<参与难度>，自定义映射记 AX。
+                 */
+                function computeLevelTag(rules, feats, mergedInfo) {
+                    if (mergedInfo) return 'MIX-' + mergedInfo.labels.join('');
+                    if (feats && feats.random) return 'AR';
+                    const g = (rules && rules.global) || 0;
+                    const diffMap = { 1: 'AT', 2: 'AD', 3: 'AH', 4: 'AF' };
+                    if (g > 0) return diffMap[g] || null;
+                    if (rules && rules.map && Object.keys(rules.map).length > 0) return 'AX';
+                    return null;
+                }
+
                 function applyDifficultyToInfo(infoContent, rules, feats, mergedInfo) {
-                    if (mergedInfo) {
-                        const tag = 'MIX-' + mergedInfo.labels.join('');
-                        return infoContent.replace(/^(Level:\s*)\S+(\s*.*)$/m, '$1' + tag + '$2');
-                    }
-                    if (feats.random) {
-                        return infoContent.replace(/^(Level:\s*)\S+(\s*.*)$/m, '$1RANDOM$2');
-                    }
-                    const { global, map } = rules;
-                    let newDiff = null;
-                    if (global > 0) {
-                        const diffMap = { 1: 'AT', 2: 'AD', 3: 'AH', 4: 'AF' };
-                        newDiff = diffMap[global] || null;
-                    } else if (Object.keys(map).length > 0) {
-                        newDiff = '?';
-                    }
+                    const newDiff = computeLevelTag(rules, feats, mergedInfo);
                     if (!newDiff) return infoContent;
                     return infoContent.replace(/^(Level:\s*)\S+(\s*.*)$/m, `$1${newDiff}$2`);
+                }
+
+                /**
+                 * 改写 info.yml 的 level 字段。
+                 * yml 与 txt 作用相同，之前只改了 txt，导致包内两个文件对不上。
+                 * 只替换等级串的第一个词（如 "AT Lv.17" → "MIX-EZHDINAT Lv.17"），
+                 * 保留后面的 Lv. 数值；引号样式（有/无）保持原样。
+                 */
+                function applyDifficultyToYml(ymlContent, rules, feats, mergedInfo) {
+                    const newDiff = computeLevelTag(rules, feats, mergedInfo);
+                    if (!newDiff) return ymlContent;
+                    return ymlContent.replace(/^([ \t]*level:[ \t]*)(?:"([^"\n]*)"|'([^'\n]*)'|([^\n]*))$/m,
+                        (m, prefix, dq, sq, bare) => {
+                            const raw = dq !== undefined ? dq : (sq !== undefined ? sq : bare);
+                            const rest = String(raw).replace(/^\S+/, '').trim();
+                            const val = rest ? (newDiff + ' ' + rest) : newDiff;
+                            if (dq !== undefined) return prefix + '"' + val + '"';
+                            if (sq !== undefined) return prefix + "'" + val + "'";
+                            return prefix + val;
+                        });
+                }
+
+                /** 在压缩包里按名字找条目（大小写不敏感，只看文件名部分） */
+                function findEntry(zip, fileName) {
+                    const target = fileName.toLowerCase();
+                    let hit = zip.file(fileName) || zip.file(fileName.toLowerCase()) || zip.file(fileName.toUpperCase());
+                    if (hit) return hit;
+                    zip.forEach((rel, e) => {
+                        if (!hit && !e.dir && rel.split('/').pop().toLowerCase() === target) hit = e;
+                    });
+                    return hit;
+                }
+
+                /** 把 info.txt / info.yml 的难度标识一起改掉 */
+                async function syncInfoFiles(zip, rules, feats, mergedInfo) {
+                    let touched = 0;
+                    const txt = findEntry(zip, 'info.txt');
+                    if (txt) {
+                        const src = await txt.async('text');
+                        const outTxt = applyDifficultyToInfo(src, rules, feats, mergedInfo);
+                        if (outTxt !== src) { zip.file(txt.name, outTxt); touched++; }
+                    }
+                    const yml = findEntry(zip, 'info.yml');
+                    if (yml) {
+                        const src = await yml.async('text');
+                        const outYml = applyDifficultyToYml(src, rules, feats, mergedInfo);
+                        if (outYml !== src) { zip.file(yml.name, outYml); touched++; }
+                    }
+                    return touched;
                 }
 
                 processBtn.addEventListener('click', async () => {
@@ -1470,8 +1541,8 @@
                                         processChartData(c.data, rules, shield, feats),
                                         c, rules, feats, null
                                     );
-                                    const base = c.srcName || c.name;
-                                    let fn = generateDownloadName(base, feats, rules, null) + one.ext;
+                                    const base = c.songName || c.srcName || c.name;
+                                    let fn = generateDownloadName(base, feats, rules, null, c.label) + one.ext;
                                     // 同名会互相覆盖，加序号兜底
                                     if (used.has(fn)) fn = fn.replace(/\.(pez|zip|json)$/i, '') + '_' + (ti + 1) + '$&';
                                     used.add(fn);
@@ -1482,7 +1553,7 @@
                                 const allBlob = await out.generateAsync({ type: 'blob', compression: 'DEFLATE' });
                                 const url = URL.createObjectURL(allBlob);
                                 const a = document.createElement('a'); a.href = url;
-                                a.download = generateDownloadName(fileName, feats, rules, null) + '_all.zip';
+                                a.download = generateDownloadName(currentSong, feats, rules, null, '') + '_all.zip';
                                 document.body.appendChild(a); a.click(); document.body.removeChild(a);
                                 setTimeout(() => URL.revokeObjectURL(url), 200);
                                 setProgress(100, '完成', '已打包 ' + targets.length + ' 张谱面');
@@ -1494,23 +1565,15 @@
                         setProgress(70, '生成文件…', isZipImport ? '重新打包 ZIP' : '生成 JSON');
                         if (isZipImport && zipImportData && zipJsonPath) {
                             const zip = await JSZip.loadAsync(zipImportData);
-                            let infoFile = zip.file('info.txt') || zip.file('Info.txt') || zip.file('INFO.TXT');
-                            if (!infoFile) {
-                                zip.forEach((path, entry) => {
-                                    if (!entry.dir && path.toLowerCase() === 'info.txt') infoFile = entry;
-                                });
-                            }
-                            if (infoFile) {
-                                const infoContent = await infoFile.async('text');
-                                const newInfo = applyDifficultyToInfo(infoContent, rules, feats, mergedInfo);
-                                zip.file(infoFile.name, newInfo);
-                                showToast('🔧', '难度已更新', `info.txt 难度缩写已自动修改`);
+                            const touched = await syncInfoFiles(zip, rules, feats, mergedInfo);
+                            if (touched > 0) {
+                                showToast('🔧', '难度已更新', `info.txt / info.yml 难度标识已同步修改`);
                             }
                             zip.file(zipJsonPath, jsonStr);
                             const newZipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
                             const url = URL.createObjectURL(newZipBlob);
                             const a = document.createElement('a'); a.href = url;
-                            a.download = generateDownloadName(fileName, feats, rules, mergedInfo) + outputExt(fileName);
+                            a.download = generateDownloadName(currentSong, feats, rules, mergedInfo, currentDiff) + currentExt;
                             document.body.appendChild(a); a.click(); document.body.removeChild(a);
                             setTimeout(() => URL.revokeObjectURL(url), 200);
                             setProgress(100, '完成', 'ZIP 文件已下载');
@@ -1519,7 +1582,7 @@
                             const blob = new Blob([jsonStr], { type: 'application/json' });
                             const url = URL.createObjectURL(blob);
                             const a = document.createElement('a'); a.href = url;
-                            a.download = generateDownloadName(fileName, feats, rules, mergedInfo) + '.json';
+                            a.download = generateDownloadName(currentSong, feats, rules, mergedInfo, currentDiff) + '.json';
                             document.body.appendChild(a); a.click(); document.body.removeChild(a);
                             setTimeout(() => URL.revokeObjectURL(url), 200);
                             setProgress(100, '完成', 'JSON 文件已下载');
