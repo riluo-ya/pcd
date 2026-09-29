@@ -11,6 +11,14 @@ export const DIFF_LABEL: Record<string, string> = { EZ: 'EZ', HD: 'HD', IN: 'IN'
 /** 每首歌会尝试抓取的文件数：3 张曲绘 + 音频 + 4 个难度谱面 */
 export const FILES_PER_SONG = 8;
 
+/** 难度配色，沿用 Phigros 玩家熟悉的 EZ绿 / HD蓝 / IN紫 / AT红 */
+export const DIFF_COLOR: Record<string, string> = {
+    EZ: '#4ade80',
+    HD: '#60a5fa',
+    IN: '#c084fc',
+    AT: '#f87171',
+};
+
 export type LevelScope = 'any' | 'highest' | 'specific';
 
 export interface Filters {
@@ -316,4 +324,13 @@ export function resolveNameCommit(
     if (!kw) return '';
     const exact = options.find(o => o.name === kw);
     return exact ? exact.name : currentValue;
+}
+
+/** 按导出范围算出某首歌实际要下几个难度的谱面 */
+export function countExportDiffs(song: Song, scope: string[]): number {
+    const actual = songLevels(song).map(l => l.diff);
+    if (actual.length === 0) return 0;
+    if (!scope || scope.length === 0) return actual.length;
+    const picked = actual.filter(d => scope.includes(d));
+    return picked.length > 0 ? picked.length : actual.length;
 }

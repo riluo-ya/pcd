@@ -22,8 +22,8 @@ interface WorkerResponse {
 
 type ExportMessage =
     | { type: 'exportAllAssets'; files: FileInfo[]; selectedSong: Song }
-    | { type: 'exportChart'; files: FileInfo[]; selectedSong: Song; selectedDifficulty: string; settings: Settings }
-    | { type: 'exportBulkAssets'; songs: Song[]; delaySeconds: number };
+    | { type: 'exportChart'; files: FileInfo[]; selectedSong: Song; selectedDifficulty: string | null; difficulties?: string[]; settings: Settings }
+    | { type: 'exportBulkAssets'; songs: Song[]; delaySeconds: number; difficultyScope?: string[] | null };
 
 const runWorker = (
     message: ExportMessage, 
@@ -104,9 +104,10 @@ export const exportAllAssets = async (
 export const exportChart = async (
     files: FileInfo[],
     selectedSong: Song,
-    selectedDifficulty: string,
+    selectedDifficulty: string | null,
     settings: Settings,
-    onProgress: (progress: number) => void
+    onProgress: (progress: number) => void,
+    difficulties?: string[]
 ) => {
     try {
         const { blob, fileName, chartId } = await runWorker({
@@ -114,13 +115,15 @@ export const exportChart = async (
             files,
             selectedSong,
             selectedDifficulty,
+            difficulties,
             settings
         }, onProgress);
 
         FileSaver.saveAs(blob, fileName);
 
         if (!settings.disableDiscordNotifications) {
-            sendChartDownloadNotification(selectedSong.name, selectedDifficulty, chartId || 'Unknown');
+            // 未指定难度时导出的是全部难度，通知里如实反映
+            sendChartDownloadNotification(selectedSong.name, selectedDifficulty || 'ALL', chartId || 'Unknown');
         }
     } catch (error) {
         console.error("Export failed:", error);
@@ -133,13 +136,15 @@ export const exportBulkAssets = async (
     delaySeconds: number,
     onBulkProgress: (currentFile: string, action: 'Downloading' | 'Zipping' | 'Waiting', songsLeft: number, percent?: number) => void,
     signal?: AbortSignal,
-    fileNameOverride?: string
+    fileNameOverride?: string,
+    difficultyScope?: string[] | null
 ): Promise<FailedFile[]> => {
     try {
         const { blob, fileName, failedFiles } = await runWorker({
             type: 'exportBulkAssets',
             songs,
-            delaySeconds
+            delaySeconds,
+            difficultyScope
         }, undefined, onBulkProgress, signal);
 
         FileSaver.saveAs(blob, fileNameOverride || fileName);

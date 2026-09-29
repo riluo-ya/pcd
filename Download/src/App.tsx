@@ -40,9 +40,6 @@ const App: React.FC = () => {
     const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null);
     const [exportState, setExportState] = useState<{ type: 'phira' | 'chart' | null; progress: number }>({ type: null, progress: 0 });
     const [blacklistWarning, setBlacklistWarning] = useState<(BlacklistEntry & { exportType: 'phira' | 'chart' }) | null>(null);
-    const [showDifficultyWarning, setShowDifficultyWarning] = useState<boolean>(false);
-    /** 「导出为谱面」按钮的即时反馈，null 为常态 */
-    const [chartHint, setChartHint] = useState<'need-difficulty' | 'blacklisted' | null>(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isFaqOpen, setIsFaqOpen] = useState(false);
     const [isAboutOpen, setIsAboutOpen] = useState(false);
@@ -55,24 +52,7 @@ const App: React.FC = () => {
     const [isBgLoaded, setIsBgLoaded] = useState<boolean>(false);
     const [activeAudio, setActiveAudio] = useState<HTMLAudioElement | null>(null);
 
-    const warningTimeoutRef = useRef<number | null>(null);
     const initialSongSelected = useRef<boolean>(false);
-    const hintTimerRef = useRef<number | null>(null);
-
-    /** 短暂显示一段提示再回到常态，避免状态一闪而过看不清 */
-    const flash = useCallback(
-        (setter: (v: any) => void, value: any, ms = 2000) => {
-            setter(value);
-            if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
-            hintTimerRef.current = window.setTimeout(() => setter(null), ms);
-        },
-        []
-    );
-
-    useEffect(() => () => {
-        if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
-    }, []);
-
     // Determine current song effect
     const activeEffect = settings.useNewUi && settings.newUiSongSpecificEffects && selectedSong 
         ? getSongEffect(selectedSong.name) 
@@ -125,14 +105,6 @@ const App: React.FC = () => {
             }
         };
         loadSongs();
-    }, []);
-
-    useEffect(() => {
-        return () => {
-            if (warningTimeoutRef.current) {
-                clearTimeout(warningTimeoutRef.current);
-            }
-        };
     }, []);
 
     const handleSongSelect = useCallback((song: Song | null) => {
@@ -269,14 +241,26 @@ const App: React.FC = () => {
         }
     };
 
+    /**
+     * 导出谱面。
+     * 选了难度就只导那一个；没选难度则导出这首歌的全部难度，
+     * 每个难度一个 .pez / .zip，打包成一个压缩包。
+     */
     const executeChartExport = async () => {
-        if (!selectedSong || !selectedDifficulty || exportState.type) return;
+        if (!selectedSong || exportState.type) return;
 
         setExportState({ type: 'chart', progress: 0 });
         try {
-            await exportChart(files, selectedSong, selectedDifficulty, settings, (progress) => {
-                setExportState(prev => ({ ...prev, progress }));
-            });
+            await exportChart(
+                files,
+                selectedSong,
+                selectedDifficulty,          // null = 导出全部难度
+                settings,
+                (progress) => {
+                    setExportState(prev => ({ ...prev, progress }));
+                },
+                availableDifficulties.length > 0 ? availableDifficulties : undefined
+            );
         } catch (error) {
             console.error("Failed to export as chart: ", error);
             alert("发生错误。请查看控制台获取更多信息。");
@@ -293,16 +277,9 @@ const App: React.FC = () => {
     const handleExportChart = () => {
         if (!selectedSong || exportState.type) return;
 
+        // 没选难度时不再拦人 —— 直接导出这首歌的全部难度
         if (!selectedDifficulty) {
-            // 未选难度：按钮自身给出反馈，并高亮难度选择器，比只弹个浮层更容易被注意到
-            setShowDifficultyWarning(true);
-            flash(setChartHint, 'need-difficulty');
-            if (warningTimeoutRef.current) {
-                clearTimeout(warningTimeoutRef.current);
-            }
-            warningTimeoutRef.current = window.setTimeout(() => {
-                setShowDifficultyWarning(false);
-            }, 3000);
+            void executeChartExport();
             return;
         }
 
@@ -463,21 +440,13 @@ const App: React.FC = () => {
                                 <FileTable selectedSong={selectedSong} onFilesFound={handleFilesFound} />
                                 {selectedSong && availableDifficulties.length > 0 && (
                                     <div className="relative mt-6">
-                                        {showDifficultyWarning && (
-                                            <div
-                                                role="alert"
-                                                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max whitespace-nowrap px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-md shadow-lg z-10"
-                                            >
-                                                请先选择难度！
-                                            </div>
-                                        )}
                                         <div className="flex justify-center items-center flex-wrap gap-4">
                                             <DifficultySelector
                                                 difficulties={availableDifficulties}
                                                 selectedDifficulty={selectedDifficulty}
                                                 onSelectDifficulty={setSelectedDifficulty}
                                                 selectedSong={selectedSong}
-                                                highlight={showDifficultyWarning}
+                                                highlight={false}
                                             />
                                             <button
                                                 type="button"
@@ -485,15 +454,11 @@ const App: React.FC = () => {
                                                 disabled={isExporting}
                                                 aria-live="polite"
                                                 className={`relative overflow-hidden px-6 py-2 font-bold rounded-lg shadow-md transition-colors duration-200 flex items-center justify-center gap-2 min-w-[190px] ${
-                                                    chartHint === 'need-difficulty'
-                                                        ? 'motion-shake bg-amber-600 text-white'
-                                                        : exportState.type === 'chart'
-                                                            ? 'bg-purple-800 text-white'
-                                                            : isExporting
-                                                                ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                                                                : !selectedDifficulty
-                                                                    ? 'bg-purple-800/60 hover:bg-purple-800 text-white'
-                                                                    : 'bg-purple-800 hover:bg-purple-900 text-white'
+                                                    exportState.type === 'chart'
+                                                        ? 'bg-purple-800 text-white'
+                                                        : isExporting
+                                                            ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                                                            : 'bg-purple-800 hover:bg-purple-900 text-white'
                                                 }`}
                                             >
                                                 {exportState.type === 'chart' ? (
@@ -501,10 +466,10 @@ const App: React.FC = () => {
                                                         <Spinner />
                                                         <span>导出中...</span>
                                                     </>
-                                                ) : chartHint === 'need-difficulty' ? (
-                                                    '请先选择难度'
+                                                ) : selectedDifficulty ? (
+                                                    `导出为谱面（${selectedDifficulty}）`
                                                 ) : (
-                                                    '导出为谱面'
+                                                    '导出全部难度'
                                                 )}
                                                 {exportState.type === 'chart' && (
                                                     <div 

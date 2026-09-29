@@ -11,6 +11,8 @@ import {
     applyStatsFilters,
     songLevels,
     blacklistedDiffs,
+    countExportDiffs,
+    DIFF_COLOR,
 } from '../utils/bulkFilters';
 import { ChartStats, scanChartStats } from '../utils/chartStats';
 import { exportBulkAssets } from '../utils/export';
@@ -112,6 +114,8 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
     const scanSigRef = useRef<string>('');
 
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    /** 导出难度范围：null/空 = 每首歌的全部难度 */
+    const [exportDiffs, setExportDiffs] = useState<string[]>([]);
     const [batchSize, setBatchSize] = useState<string>('50');
     const [delay, setDelay] = useState<string>('0.6');
 
@@ -215,7 +219,11 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
 
     // 预计：每首 8 个请求 + 歌曲间延迟
     const delaySec = Math.max(0, Number(delay) || 0);
-    const estRequests = selectedSongs.length * FILES_PER_SONG;
+    // 谱面请求数按「每首歌实际要下的难度数」算，而不是一律 4
+    const estRequests = selectedSongs.reduce(
+        (sum, s) => sum + (FILES_PER_SONG - 4) + countExportDiffs(s, exportDiffs),
+        0
+    );
     const estSeconds = Math.round(selectedSongs.length * (1.2 + delaySec));
     const estText = estSeconds >= 60
         ? `约 ${Math.floor(estSeconds / 60)} 分 ${estSeconds % 60} 秒`
@@ -273,7 +281,8 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
                             batches: targets.length,
                         }),
                     ctrl.signal,
-                    name
+                    name,
+                    exportDiffs.length > 0 ? exportDiffs : null
                 );
                 collected.push(...failed);
             }
@@ -616,11 +625,29 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
                                                         </span>
                                                     )}
                                                 </span>
-                                                <span className="text-[11px] text-slate-500 truncate w-24 text-right">
+                                                <span className="text-[11px] text-slate-500 truncate w-20 text-right">
                                                     {song.composer}
                                                 </span>
-                                                <span className="text-[11px] font-mono text-slate-400 w-10 text-right flex-shrink-0">
-                                                    {top === null ? '—' : top.toFixed(1)}
+                                                {/* 把该曲全部难度都列出来，避免只看得到一个定数，
+                                                    误以为导出时只会下载一个难度 */}
+                                                <span className="flex items-center gap-1 flex-shrink-0">
+                                                    {levels.length === 0 ? (
+                                                        <span className="text-[10px] text-slate-600">—</span>
+                                                    ) : (
+                                                        levels.map(l => (
+                                                            <span
+                                                                key={l.diff}
+                                                                className="px-1 py-0.5 rounded text-[10px] font-semibold leading-none"
+                                                                style={{
+                                                                    color: DIFF_COLOR[l.diff],
+                                                                    background: `${DIFF_COLOR[l.diff]}22`,
+                                                                }}
+                                                                title={`${l.diff} ${l.level.toFixed(1)}`}
+                                                            >
+                                                                {l.diff}
+                                                            </span>
+                                                        ))
+                                                    )}
                                                 </span>
                                             </label>
                                         </div>
@@ -629,6 +656,44 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
                             </div>
                         )}
                     </div>
+                </div>
+
+                {/* 导出难度 */}
+                <div className="rounded-lg border border-slate-700/50 px-3 py-2.5">
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-semibold text-slate-200">导出难度</span>
+                        <span className="text-[11px] text-slate-500">
+                            {exportDiffs.length === 0
+                                ? '全部难度'
+                                : `仅 ${exportDiffs.join(' / ')}`}
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        <ChipToggle
+                            label="全部"
+                            active={exportDiffs.length === 0}
+                            onClick={() => setExportDiffs([])}
+                        />
+                        {DIFFS.map(d => (
+                            <ChipToggle
+                                key={d}
+                                label={DIFF_LABEL[d]}
+                                active={exportDiffs.includes(d)}
+                                color={DIFF_COLOR[d]}
+                                onClick={() =>
+                                    setExportDiffs(prev =>
+                                        prev.includes(d)
+                                            ? prev.filter(x => x !== d)
+                                            : [...prev, d]
+                                    )
+                                }
+                            />
+                        ))}
+                    </div>
+                    <p className="text-[11px] text-slate-600 mt-1.5">
+                        默认导出每首歌的全部难度；只想练某个难度时可单独指定，
+                        不存在的难度会自动跳过。
+                    </p>
                 </div>
 
                 {/* 导出设置 */}
