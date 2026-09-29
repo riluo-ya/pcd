@@ -166,17 +166,20 @@ Exoplanetary Mirage_AT.pez
 
 | 标识 | 含义 |
 |---|---|
-| `AT` | 全部转为 Tap |
-| `AD` | 全部转为 Drag |
-| `AH` | 全部转为 Hold |
-| `AF` | 全部转为 Flick |
-| `AR` | 随机 |
-| `AM` | 整合混排 |
+| `ALL TAP` | 全部转为 Tap |
+| `ALL DRAG` | 全部转为 Drag |
+| `ALL HOLD` | 全部转为 Hold |
+| `ALL FLICK` | 全部转为 Flick |
+| `RANDOM` | 随机 |
+| `MIXTURE` | 整合混排 |
 | `AX` | 自定义类型映射 |
 | `IN` 等 | 未做转换时，保留谱面原本的难度 |
 
-包内 `info.txt` / `info.yml` 的 `Level` 字段写的是更完整的形式
-（整合时是 `MIX-EZHDINAT`，其余同上），文件名则用简短标识。
+文件名与包内 `info.txt` / `info.yml` 的 `Level` 字段用同一套标识，
+全部大写。整合统一记 `MIXTURE`，不再把参与难度拼进去（如 `MIX-EZHDINAT`）。
+
+标识含空格（如 `ALL TAP`），所以替换时按「`Lv.` 及之后」切分、
+只改它前面的部分 —— 对已处理过的文件再跑一次不会叠成 `ALL ALL TAP`。
 
 答题页的几个机制：
 
