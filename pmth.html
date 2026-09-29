@@ -281,10 +281,10 @@
         </header>
 
         <div class="uploader" id="dropZone">
-            <input type="file" id="fileInput" accept=".json,.zip,application/json,application/zip" multiple>
+            <input type="file" id="fileInput" accept=".json,.zip,.pez,application/json,application/zip" multiple>
             <div class="uploader-icon">📂</div>
-            <h3>点击或拖拽上传谱面 JSON / ZIP</h3>
-            <span>支持批量上传：同一首歌的多个难度可一次选中，之后用「整合」混排</span>
+            <h3>点击或拖拽上传谱面 JSON / ZIP / PEZ</h3>
+            <span>支持批量上传：压缩包套压缩包会自动展开，同一首歌的多个难度可一次选中后用「整合」混排</span>
             <div class="file-chip" id="fileChip">
                 <span>✓</span>
                 <span id="fileChipText">未选择文件</span>
@@ -303,6 +303,10 @@
             <div class="mo-tip" style="margin-top:8px;font-size:11px;color:#94a3b8">
                 ☑ 勾选 = 参与整合　·　点「设为主谱面」指定基准（决定 BPM、背景、判定线来源）
             </div>
+            <label class="mo-row" style="margin-top:8px;cursor:pointer" title="不整合时，把每张勾选的谱面各自处理并打包成一个压缩包">
+                <input type="checkbox" id="splitOutput">
+                <span style="font-size:12px;color:#cbd5e1">分别处理所有勾选谱面，打包成一个压缩包</span>
+            </label>
         </div>
 
         <div id="emptyBox">
@@ -525,6 +529,7 @@
                 const segCount = $('#segCount');
                 const dedupeLines = $('#dedupeLines');
                 const mergeTip = $('#mergeTip');
+                const splitOutput = $('#splitOutput');
                 const chartList = $('#chartList');
                 const batchPanel = $('#batchPanel');
                 const batchCount = $('#batchCount');
@@ -590,7 +595,8 @@
                 dropZone.addEventListener('click', (e) => { if(e.target !== fileInput) fileInput.click(); });
                 fileInput.addEventListener('change', e => { ingestFiles(e.target.files); fileInput.value = ''; });
 
-                function isZipFile(file) { return file.name.toLowerCase().endsWith('.zip') || file.type === 'application/zip'; }
+                // .pez 本质就是改了扩展名的 zip，Phira 靠扩展名识别，这里必须一并认
+                function isZipFile(file) { const n = file.name.toLowerCase(); return n.endsWith('.zip') || n.endsWith('.pez') || file.type === 'application/zip'; }
                 function isJsonFile(file) { return file.name.toLowerCase().endsWith('.json') || file.type === 'application/json'; }
 
                 /** 批量导入：逐个解析，成功的追加到 charts，最后统一刷新 */
@@ -601,7 +607,7 @@
                     for (const f of files) {
                         if (isZipFile(f)) { if (await handleZipFile(f)) ok++; }
                         else if (isJsonFile(f)) { if (await handleJsonFile(f)) ok++; }
-                        else showToast('❌', '格式错误', f.name + ' 不是 .json / .zip');
+                        else showToast('❌', '格式错误', f.name + ' 不是 .json / .zip / .pez');
                     }
                     if (!ok) return;
                     refreshCharts();
@@ -612,7 +618,7 @@
 
                 /** 从文件名猜难度标签，猜不到就按序号 */
                 function guessLabel(name, idx) {
-                    const up = String(name || '').toUpperCase().replace(/\.(JSON|ZIP)$/i, '');
+                    const up = String(name || '').toUpperCase().replace(/\.(JSON|ZIP|PEZ)$/i, '');
                     const m = up.match(/(?:^|[._\-\/\s])(EZ|EASY|HD|HARD|IN|INSANE|AT|ANOTHER|SP)(?:[._\-\/\s]|$)/);
                     if (m) {
                         const map = { EZ: 'EZ', EASY: 'EZ', HD: 'HD', HARD: 'HD', IN: 'IN', INSANE: 'IN', AT: 'AT', ANOTHER: 'AT', SP: 'SP' };
@@ -634,9 +640,11 @@
                     const item = {
                         id: 'c' + (nextChartId++),
                         name: name,
+                        srcName: name,
                         label: guessLabel(name, charts.length),
                         data: data,
                         zip: zip || null,
+                        group: '',
                         include: true,
                         isMain: charts.length === 0
                     };
@@ -753,23 +761,171 @@
                     });
                 }
 
+                /** 取路径的一级目录名，用于推断歌曲名（曲名/曲名_IN.pez → 曲名） */
+                function topDirName(p) {
+                    const parts = String(p || '').split('/').filter(Boolean);
+                    return parts.length > 1 ? parts[0] : '';
+                }
+
+                /** 取文件名并去掉扩展名 */
+                function baseNoExt(p) {
+                    const parts = String(p || '').split('/').filter(Boolean);
+                    return (parts[parts.length - 1] || '').replace(/\.[^.]+$/, '');
+                }
+
+                /** 从 info.txt 读曲名与难度，形如「Name: xxx」「Level: IN Lv.16」 */
+                function readInfoTxt(text) {
+                    const out = { name: null, diff: null };
+                    const nm = String(text || '').match(/^[ \t]*Name:[ \t]*(.+)$/m);
+                    if (nm) out.name = nm[1].trim();
+                    const lv = String(text || '').match(/^[ \t]*Level:[ \t]*([A-Za-z]+)/m);
+                    if (lv) out.diff = lv[1].toUpperCase();
+                    return out;
+                }
+
+                /**
+                 * 尝试把一个压缩包当作「单个谱面包」解析（内含谱面 JSON + info.txt + 曲绘 + 音频）。
+                 * 成功返回谱面信息，失败返回 null（说明它是容器，需要继续往下挖）。
+                 */
+                async function parseAsChartZip(zip) {
+                    const entries = [];
+                    zip.forEach((rel, e) => { if (!e.dir) entries.push([rel, e]); });
+                    if (!entries.length) return null;
+
+                    const infoEntry = entries.find(([rel]) =>
+                        rel.split('/').pop().toLowerCase() === 'info.txt');
+                    let info = { name: null, diff: null };
+                    if (infoEntry) {
+                        try { info = readInfoTxt(await infoEntry[1].async('text')); }
+                        catch (err) { /* info.txt 读不了不影响谱面本身 */ }
+                    }
+
+                    // 谱面 JSON 名字是随机数字（如 4351585272647465.json），
+                    // 所以只能靠内容判断哪个是谱面，不能靠文件名
+                    for (const [rel, e] of entries) {
+                        if (!rel.toLowerCase().endsWith('.json')) continue;
+                        try {
+                            const data = JSON.parse(await e.async('text'));
+                            if (data && Array.isArray(data.judgeLineList) && data.judgeLineList.length) {
+                                return { data: data, jsonPath: rel, infoName: info.name, infoDiff: info.diff };
+                            }
+                        } catch (err) { /* 不是谱面 JSON，继续找 */ }
+                    }
+                    return null;
+                }
+
+                /**
+                 * 递归扫描压缩包，收集其中的全部谱面。
+                 *
+                 * 支持「压缩包套压缩包」：外层按歌曲分目录，内层每难度一个 .pez / .zip。
+                 * 判定方式很直接 —— 能解析出谱面就当谱面包收下，否则当容器继续往下挖。
+                 */
+                async function scanZip(buffer, songHint, depth, out) {
+                    if (depth > 4) { console.warn('[scanZip] 嵌套过深，已停止'); return 0; }
+                    let zip;
+                    try { zip = await JSZip.loadAsync(buffer); }
+                    catch (err) { return 0; }
+
+                    const entries = [];
+                    zip.forEach((rel, e) => { if (!e.dir) entries.push([rel, e]); });
+                    if (!entries.length) return 0;
+                    if (entries.length > 500) {
+                        console.warn('[scanZip] 条目过多，只处理前 500 个');
+                        entries.length = 500;
+                    }
+
+                    const subZips = entries.filter(([rel]) => {
+                        const l = rel.toLowerCase();
+                        return l.endsWith('.zip') || l.endsWith('.pez');
+                    });
+
+                    // 关键判定：这一层到底是「一个谱面包」还是「装着很多谱面的容器」？
+                    // 只看「能不能解析出谱面」是不够的 —— 平铺格式（charts/EZ.json、
+                    // charts/HD.json...）也有谱面 JSON，会误判成单个谱面包，只收下第一张。
+                    // 所以先看有没有子压缩包、谱面 JSON 是否多于一个。
+                    let chartJsonCount = 0;
+                    for (const [rel, e] of entries) {
+                        if (!rel.toLowerCase().endsWith('.json')) continue;
+                        try {
+                            const d = JSON.parse(await e.async('text'));
+                            if (d && Array.isArray(d.judgeLineList) && d.judgeLineList.length) chartJsonCount++;
+                        } catch (err) { /* 不是谱面 JSON */ }
+                    }
+
+                    const isContainer = subZips.length > 0 || chartJsonCount > 1;
+                    if (!isContainer) {
+                        const asChart = await parseAsChartZip(zip);
+                        if (asChart) {
+                            out.push({
+                                data: asChart.data,
+                                buf: buffer,
+                                jsonPath: asChart.jsonPath,
+                                song: asChart.infoName || songHint || '',
+                                diff: asChart.infoDiff || guessLabel(songHint || '', 0),
+                                path: songHint || '',
+                            });
+                            return 1;
+                        }
+                        return 0;
+                    }
+
+                    let n = 0;
+                    for (const [rel, e] of entries) {
+                        const lower = rel.toLowerCase();
+                        if (lower.endsWith('.zip') || lower.endsWith('.pez')) {
+                            // 歌曲名优先取所在目录名，其次是内层文件名
+                            const song = topDirName(rel) || baseNoExt(rel) || songHint || '';
+                            const sub = await e.async('arraybuffer');
+                            n += await scanZip(sub, song, depth + 1, out);
+                        } else if (lower.endsWith('.json')) {
+                            try {
+                                const data = JSON.parse(await e.async('text'));
+                                if (data && Array.isArray(data.judgeLineList)) {
+                                    out.push({
+                                        data: data,
+                                        buf: null,
+                                        jsonPath: null,
+                                        song: topDirName(rel) || songHint || '',
+                                        diff: guessLabel(rel, 0),
+                                        path: rel,
+                                    });
+                                    n++;
+                                }
+                            } catch (err) { /* 非谱面 JSON，跳过 */ }
+                        }
+                    }
+                    return n;
+                }
+
                 async function handleZipFile(file) {
                     try {
                         const arrayBuffer = await file.arrayBuffer();
-                        const zip = await JSZip.loadAsync(arrayBuffer);
-                        const jsonFiles = [];
-                        zip.forEach((relativePath, zipEntry) => {
-                            if(!zipEntry.dir && relativePath.toLowerCase().endsWith('.json')) jsonFiles.push(relativePath);
-                        });
-                        if(jsonFiles.length === 0) { showToast('❌','ZIP 内无 JSON','未找到谱面文件'); return; }
-                        const targetPath = jsonFiles[0];
-                        if(jsonFiles.length > 1) showToast('⚠️','多个 JSON 文件',`已自动选择: ${targetPath}`);
-                        const jsonEntry = zip.file(targetPath);
-                        if(!jsonEntry) { showToast('❌','读取失败','无法读取 ZIP 内的 JSON'); return; }
-                        const chartObj = JSON.parse(await jsonEntry.async('text'));
-                        const item = addChart(file.name, chartObj, { buf: arrayBuffer, jsonPath: targetPath });
-                        if (item) item.name = file.name + ' → ' + targetPath;
-                        return !!item;
+                        const found = [];
+                        const n = await scanZip(arrayBuffer, baseNoExt(file.name), 0, found);
+                        if (n === 0) { showToast('❌','ZIP 内无谱面','未找到有效的谱面文件'); return false; }
+
+                        let ok = 0;
+                        for (const f of found) {
+                            // 名称带上歌曲名，多首歌时才能分清谁是谁
+                            const label = f.song ? (f.song + ' ' + (f.diff || '')) : (f.diff || baseNoExt(f.path));
+                            const item = addChart(
+                                (f.song ? f.song + ' · ' : '') + (f.diff || baseNoExt(f.path)),
+                                f.data,
+                                f.buf && f.jsonPath ? { buf: f.buf, jsonPath: f.jsonPath } : null
+                            );
+                            if (item) {
+                                item.srcName = f.song ? (f.song + '_' + (f.diff || '')) : (f.diff || 'chart');
+                                if (f.diff) item.label = f.diff;
+                                item.group = f.song || '';
+                                ok++;
+                            }
+                        }
+                        if (ok > 1) {
+                            const groups = new Set(found.map(f => f.song).filter(Boolean));
+                            showToast('✅', '已展开 ' + ok + ' 张',
+                                groups.size > 1 ? (groups.size + ' 首歌 · ' + ok + ' 个难度') : (ok + ' 个难度'));
+                        }
+                        return ok > 0;
                     } catch(err) { showToast('❌','ZIP 处理失败',err.message); console.error(err); return false; }
                 }
 
@@ -1187,7 +1343,7 @@
                 }
 
                 function generateDownloadName(baseName, feats, rules, mergedInfo) {
-                    const base = baseName.replace(/\.(json|zip)$/i, '');
+                    const base = baseName.replace(/\.(json|zip|pez)$/i, '');
                     const tags = [];
                     if (mergedInfo) {
                         tags.push('mix' + mergedInfo.labels.join(''));
@@ -1202,6 +1358,41 @@
                         else if (Object.keys(map).length) tags.push('mod');
                     }
                     return base + (tags.length ? '_' + tags.join('_') : '_processed');
+                }
+
+                /**
+                 * 组装单张谱面的输出。
+                 * 导入的是 zip / pez 就保持容器（替换谱面 JSON 与 info.txt），
+                 * 导入的是裸 json 就输出 json。扩展名跟随原格式。
+                 */
+                async function buildOneOutput(data, chart, rules, feats, mergedInfo) {
+                    const jsonStr = JSON.stringify(data);
+                    if (chart && chart.zip && chart.zip.buf && chart.zip.jsonPath) {
+                        const zip = await JSZip.loadAsync(chart.zip.buf);
+                        let infoFile = zip.file('info.txt') || zip.file('Info.txt') || zip.file('INFO.TXT');
+                        if (!infoFile) {
+                            zip.forEach((path, entry) => {
+                                if (!entry.dir && path.toLowerCase() === 'info.txt') infoFile = entry;
+                            });
+                        }
+                        if (infoFile) {
+                            const infoContent = await infoFile.async('text');
+                            zip.file(infoFile.name, applyDifficultyToInfo(infoContent, rules, feats, mergedInfo));
+                        }
+                        zip.file(chart.zip.jsonPath, jsonStr);
+                        const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+                        return { blob: blob, ext: outputExt(chart.srcName || chart.name) };
+                    }
+                    return {
+                        blob: new Blob([jsonStr], { type: 'application/json' }),
+                        ext: outputExt(chart ? (chart.srcName || chart.name) : 'chart.json')
+                    };
+                }
+
+                /** 按导入时的格式决定输出扩展名：.pez 进就 .pez 出，否则 Phira 认不出来 */
+                function outputExt(name) {
+                    const m = String(name || '').match(/\.(pez|zip|json)$/i);
+                    return m ? m[0].toLowerCase() : '.json';
                 }
 
                 function applyDifficultyToInfo(infoContent, rules, feats, mergedInfo) {
@@ -1263,6 +1454,43 @@
 
                         const processedData = processChartData(srcData, rules, shield, feats);
                         const jsonStr = JSON.stringify(processedData);
+
+                        // 分别处理模式：把每张勾选的谱面各自打包，再汇总成一个压缩包
+                        if (!feats.merge && splitOutput.checked) {
+                            const targets = charts.filter(c => c.include);
+                            if (targets.length < 2) {
+                                showToast('⚠️', '无需分别处理', '只有 1 张谱面，已按单张输出');
+                            } else {
+                                setProgress(70, '生成文件…', '分别处理 ' + targets.length + ' 张谱面');
+                                const out = new JSZip();
+                                const used = new Set();
+                                for (let ti = 0; ti < targets.length; ti++) {
+                                    const c = targets[ti];
+                                    const one = await buildOneOutput(
+                                        processChartData(c.data, rules, shield, feats),
+                                        c, rules, feats, null
+                                    );
+                                    const base = c.srcName || c.name;
+                                    let fn = generateDownloadName(base, feats, rules, null) + one.ext;
+                                    // 同名会互相覆盖，加序号兜底
+                                    if (used.has(fn)) fn = fn.replace(/\.(pez|zip|json)$/i, '') + '_' + (ti + 1) + '$&';
+                                    used.add(fn);
+                                    // 有歌曲名时按歌曲分目录，和下载站导出的结构保持一致
+                                    const parent = c.group ? (out.folder(c.group.replace(/[<>:"/\\|?*]/g, '')) || out) : out;
+                                    parent.file(fn, one.blob);
+                                }
+                                const allBlob = await out.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+                                const url = URL.createObjectURL(allBlob);
+                                const a = document.createElement('a'); a.href = url;
+                                a.download = generateDownloadName(fileName, feats, rules, null) + '_all.zip';
+                                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                                setTimeout(() => URL.revokeObjectURL(url), 200);
+                                setProgress(100, '完成', '已打包 ' + targets.length + ' 张谱面');
+                                showToast('✅', '处理完成', a.download);
+                                return;
+                            }
+                        }
+
                         setProgress(70, '生成文件…', isZipImport ? '重新打包 ZIP' : '生成 JSON');
                         if (isZipImport && zipImportData && zipJsonPath) {
                             const zip = await JSZip.loadAsync(zipImportData);
@@ -1282,7 +1510,7 @@
                             const newZipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
                             const url = URL.createObjectURL(newZipBlob);
                             const a = document.createElement('a'); a.href = url;
-                            a.download = generateDownloadName(fileName, feats, rules, mergedInfo) + '.zip';
+                            a.download = generateDownloadName(fileName, feats, rules, mergedInfo) + outputExt(fileName);
                             document.body.appendChild(a); a.click(); document.body.removeChild(a);
                             setTimeout(() => URL.revokeObjectURL(url), 200);
                             setProgress(100, '完成', 'ZIP 文件已下载');
