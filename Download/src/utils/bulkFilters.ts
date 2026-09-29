@@ -152,3 +152,113 @@ export function applyStatsFilters(songs: Song[], f: Filters, stats: Map<string, 
         return true;
     });
 }
+
+// ================= 主页选歌的轻量筛选 =================
+// 只做「难度 / 谱师 / 曲师」三项，不解析谱面，保证下拉列表秒开。
+
+export interface QuickFilters {
+    /** 必须存在的难度，如 ['AT']；空数组表示不限制 */
+    requireDiffs: string[];
+    /** 定数下限 / 上限，空字符串表示不限 */
+    levelMin: string;
+    levelMax: string;
+    /** 谱师名，完全匹配（从下拉里选，避免拼写问题） */
+    charter: string;
+    /** 曲师（作曲家）名，完全匹配 */
+    composer: string;
+}
+
+export const emptyQuickFilters: QuickFilters = {
+    requireDiffs: [],
+    levelMin: '',
+    levelMax: '',
+    charter: '',
+    composer: '',
+};
+
+/** 有几项筛选正在生效，用于按钮上的角标 */
+export function countActiveQuickFilters(f: QuickFilters): number {
+    let n = 0;
+    if (f.requireDiffs.length > 0) n++;
+    if (f.levelMin.trim() || f.levelMax.trim()) n++;
+    if (f.charter) n++;
+    if (f.composer) n++;
+    return n;
+}
+
+/** 按轻量筛选条件过滤曲目 */
+export function applyQuickFilters(songs: Song[], f: QuickFilters): Song[] {
+    const lo = num(f.levelMin);
+    const hi = num(f.levelMax);
+    const noLevelFilter = lo === null && hi === null;
+    const noDiffFilter = f.requireDiffs.length === 0;
+
+    // 三项都没设，直接返回原数组，避免无谓遍历
+    if (noLevelFilter && noDiffFilter && !f.charter && !f.composer) return songs;
+
+    return songs.filter(song => {
+        // 必须存在的难度
+        if (!noDiffFilter) {
+            const has = DIFFS.filter(d => levelOf(song, d) !== null);
+            if (!f.requireDiffs.every(d => has.includes(d))) return false;
+        }
+
+        // 定数：任一难度落在区间内即可
+        if (!noLevelFilter) {
+            const levels = songLevels(song).map(l => l.level);
+            if (levels.length === 0) return false;
+            if (!levels.some(v => (lo === null || v >= lo) && (hi === null || v <= hi))) return false;
+        }
+
+        // 谱师：该曲任一难度的谱师命中即可（区分大小写完全匹配）
+        if (f.charter) {
+            const hit = DIFFS.some(d => song.charters?.[d] === f.charter);
+            if (!hit) return false;
+        }
+
+        // 曲师（作曲家）
+        if (f.composer && song.composer !== f.composer) return false;
+
+        return true;
+    });
+}
+
+/**
+ * 收集曲库里出现过的全部谱师名，按作品数降序。
+ *
+ * 注意 count 按「歌曲」计，不按「难度条目」计：
+ * 一首歌的四个难度可能都是同一位谱师，若按条目累加会显示成 37，
+ * 而实际筛出来只有 24 首，下拉里的数字会对不上。
+ */
+export function collectCharters(songs: Song[]): { name: string; count: number }[] {
+    const byName = new Map<string, Set<string>>();
+    for (const song of songs) {
+        for (const d of DIFFS) {
+            const name = song.charters?.[d];
+            if (!name) continue;
+            let set = byName.get(name);
+            if (!set) {
+                set = new Set();
+                byName.set(name, set);
+            }
+            // 同一首歌只计一次
+            set.add(song.id);
+        }
+    }
+    return [...byName.entries()]
+        .map(([name, ids]) => ({ name, count: ids.size }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+/** 收集曲库里出现过的全部曲师名，按出现次数降序 */
+export function collectComposers(songs: Song[]): { name: string; count: number }[] {
+    const counts = new Map<string, number>();
+    for (const song of songs) {
+        const name = song.composer;
+        if (!name) continue;
+        counts.set(name, (counts.get(name) || 0) + 1);
+    }
+    return [...counts.entries()]
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}

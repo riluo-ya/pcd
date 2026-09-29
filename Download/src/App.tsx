@@ -41,6 +41,8 @@ const App: React.FC = () => {
     const [exportState, setExportState] = useState<{ type: 'phira' | 'chart' | null; progress: number }>({ type: null, progress: 0 });
     const [blacklistWarning, setBlacklistWarning] = useState<(BlacklistEntry & { exportType: 'phira' | 'chart' }) | null>(null);
     const [showDifficultyWarning, setShowDifficultyWarning] = useState<boolean>(false);
+    /** 「导出为谱面」按钮的即时反馈，null 为常态 */
+    const [chartHint, setChartHint] = useState<'need-difficulty' | 'blacklisted' | null>(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isFaqOpen, setIsFaqOpen] = useState(false);
     const [isAboutOpen, setIsAboutOpen] = useState(false);
@@ -55,6 +57,21 @@ const App: React.FC = () => {
 
     const warningTimeoutRef = useRef<number | null>(null);
     const initialSongSelected = useRef<boolean>(false);
+    const hintTimerRef = useRef<number | null>(null);
+
+    /** 短暂显示一段提示再回到常态，避免状态一闪而过看不清 */
+    const flash = useCallback(
+        (setter: (v: any) => void, value: any, ms = 2000) => {
+            setter(value);
+            if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+            hintTimerRef.current = window.setTimeout(() => setter(null), ms);
+        },
+        []
+    );
+
+    useEffect(() => () => {
+        if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    }, []);
 
     // Determine current song effect
     const activeEffect = settings.useNewUi && settings.newUiSongSpecificEffects && selectedSong 
@@ -277,7 +294,9 @@ const App: React.FC = () => {
         if (!selectedSong || exportState.type) return;
 
         if (!selectedDifficulty) {
+            // 未选难度：按钮自身给出反馈，并高亮难度选择器，比只弹个浮层更容易被注意到
             setShowDifficultyWarning(true);
+            flash(setChartHint, 'need-difficulty');
             if (warningTimeoutRef.current) {
                 clearTimeout(warningTimeoutRef.current);
             }
@@ -464,10 +483,17 @@ const App: React.FC = () => {
                                                 type="button"
                                                 onClick={handleExportChart}
                                                 disabled={isExporting}
+                                                aria-live="polite"
                                                 className={`relative overflow-hidden px-6 py-2 font-bold rounded-lg shadow-md transition-colors duration-200 flex items-center justify-center gap-2 min-w-[190px] ${
-                                                    !selectedDifficulty || isExporting
-                                                        ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                                                        : 'bg-purple-800 hover:bg-purple-900 text-white'
+                                                    chartHint === 'need-difficulty'
+                                                        ? 'motion-shake bg-amber-600 text-white'
+                                                        : exportState.type === 'chart'
+                                                            ? 'bg-purple-800 text-white'
+                                                            : isExporting
+                                                                ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                                                                : !selectedDifficulty
+                                                                    ? 'bg-purple-800/60 hover:bg-purple-800 text-white'
+                                                                    : 'bg-purple-800 hover:bg-purple-900 text-white'
                                                 }`}
                                             >
                                                 {exportState.type === 'chart' ? (
@@ -475,6 +501,8 @@ const App: React.FC = () => {
                                                         <Spinner />
                                                         <span>导出中...</span>
                                                     </>
+                                                ) : chartHint === 'need-difficulty' ? (
+                                                    '请先选择难度'
                                                 ) : (
                                                     '导出为谱面'
                                                 )}
@@ -489,10 +517,13 @@ const App: React.FC = () => {
                                                 type="button"
                                                 onClick={handleExportAllAssets}
                                                 disabled={!selectedSong || isExporting || files.length === 0}
+                                                aria-live="polite"
                                                 className={`relative overflow-hidden px-6 py-2 font-bold rounded-lg shadow-md transition-colors duration-200 flex items-center justify-center gap-2 min-w-[190px] ${
-                                                    !selectedSong || isExporting || files.length === 0
-                                                        ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                                                        : 'bg-indigo-700 hover:bg-indigo-800 text-white'
+                                                    exportState.type === 'phira'
+                                                        ? 'bg-indigo-700 text-white'
+                                                        : !selectedSong || isExporting || files.length === 0
+                                                            ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                                                            : 'bg-indigo-700 hover:bg-indigo-800 text-white'
                                                 }`}
                                             >
                                                 {exportState.type === 'phira' ? (
@@ -500,6 +531,9 @@ const App: React.FC = () => {
                                                         <Spinner />
                                                         <span>导出中...</span>
                                                     </>
+                                                ) : exportState.type === 'chart' ? (
+                                                    // 另一个导出在跑，说明为什么这个点不了
+                                                    '等待中'
                                                 ) : (
                                                     '导出全部资源'
                                                 )}

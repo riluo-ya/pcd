@@ -455,10 +455,10 @@
             const uid = parts[1];
             const providedSig = parts[2];
             const now = Date.now();
-            const expirationTime = timestamp + (60 * 60 * 1000);
+            const expirationTime = timestamp + (12 * 60 * 60 * 1000);
             if (now > expirationTime) {
                 localStorage.removeItem('access_token');
-                throw new Error('凭证已过期 (超过1小时)');
+                throw new Error('凭证已过期 (超过12小时)');
             }
             const signString = `${timestamp}|${uid}`;
             const expectedSig = simpleHash(signString);

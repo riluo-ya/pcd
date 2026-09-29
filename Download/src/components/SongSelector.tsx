@@ -6,7 +6,16 @@ import { songNameAliases } from '../song-aliases';
 import { useSettings } from '../contexts/SettingsContext';
 import { getSongEffect } from '../song-effects';
 import { Song, SortConfig, SortType, SortDirection } from '../types';
-import { ChevronDownIcon, ErrorIcon, MagnifyingGlassIcon, ArrowsUpDownIcon, CheckIcon } from './Icons';
+import { ChevronDownIcon, ErrorIcon, MagnifyingGlassIcon, ArrowsUpDownIcon, CheckIcon, FunnelIcon, XMarkIcon } from './Icons';
+import {
+    QuickFilters,
+    emptyQuickFilters,
+    countActiveQuickFilters,
+    applyQuickFilters,
+    collectCharters,
+    collectComposers,
+    DIFFS,
+} from '../utils/bulkFilters';
 
 interface SongSelectorProps {
   isLoading: boolean;
@@ -35,12 +44,34 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
     const { settings } = useSettings();
     const [isOpen, setIsOpen] = useState(false);
     const [isSortOpen, setIsSortOpen] = useState(false);
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [filters, setFilters] = useState<QuickFilters>(emptyQuickFilters);
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
     const wrapperRef = useRef<HTMLDivElement>(null);
     const sortWrapperRef = useRef<HTMLDivElement>(null);
+    const filterWrapperRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const parentRef = useRef<HTMLUListElement>(null);
+
+    /** 曲库里出现过的谱师 / 曲师，用于筛选下拉 */
+    const charterOptions = useMemo(() => collectCharters(songs), [songs]);
+    const composerOptions = useMemo(() => collectComposers(songs), [songs]);
+    const activeFilterCount = useMemo(() => countActiveQuickFilters(filters), [filters]);
+
+    const setFilter = <K extends keyof QuickFilters>(key: K, value: QuickFilters[K]) =>
+        setFilters(prev => ({ ...prev, [key]: value }));
+
+    const toggleDiffFilter = (d: string) =>
+        setFilters(prev => ({
+            ...prev,
+            requireDiffs: prev.requireDiffs.includes(d)
+                ? prev.requireDiffs.filter(x => x !== d)
+                : [...prev.requireDiffs, d],
+        }));
+
+    /** 筛选后的曲库，作为搜索的候选集 */
+    const filteredSongs = useMemo(() => applyQuickFilters(songs, filters), [songs, filters]);
 
     useEffect(() => {
         const handler = setTimeout(() => {
@@ -67,11 +98,11 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
 
     const { displayedSongs, isSuggestion } = useMemo(() => {
         if (!debouncedSearchTerm) {
-            return { displayedSongs: songs, isSuggestion: false };
+            return { displayedSongs: filteredSongs, isSuggestion: false };
         }
         const normalizedSearchTerm = normalizeSearchString(debouncedSearchTerm);
 
-        const directMatches = songs.filter(song =>
+        const directMatches = filteredSongs.filter(song =>
             normalizeSearchString(song.name).includes(normalizedSearchTerm)
         );
 
@@ -90,7 +121,7 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
         }
 
         return { displayedSongs: [], isSuggestion: false };
-    }, [songs, debouncedSearchTerm, aliasList]);
+    }, [filteredSongs, debouncedSearchTerm, aliasList]);
 
 
     useEffect(() => {
@@ -109,12 +140,32 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
             if (sortWrapperRef.current && !sortWrapperRef.current.contains(event.target as Node)) {
                 setIsSortOpen(false);
             }
+
+            // Close filter popup if clicked outside of it
+            if (filterWrapperRef.current && !filterWrapperRef.current.contains(event.target as Node)) {
+                setIsFilterOpen(false);
+            }
         };
         document.addEventListener("mousedown", handleClickOutside);
         return () => {
             document.removeEventListener("mousedown", handleClickOutside);
         };
-    }, [wrapperRef, sortWrapperRef]);
+    }, [wrapperRef, sortWrapperRef, filterWrapperRef]);
+
+    // Esc 关闭当前打开的那个浮层，从最内层开始关
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            if (isSortOpen) { setIsSortOpen(false); return; }
+            if (isFilterOpen) { setIsFilterOpen(false); return; }
+            if (isOpen) {
+                setIsOpen(false);
+                setSearchTerm('');
+            }
+        };
+        document.addEventListener("keydown", onKeyDown);
+        return () => document.removeEventListener("keydown", onKeyDown);
+    }, [isOpen, isSortOpen, isFilterOpen]);
     
     useEffect(() => {
         if (isOpen) {
@@ -201,12 +252,47 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
                                 />
                             </div>
                         </div>
+                        {activeFilterCount > 0 && (
+                            <div className="flex items-center gap-2 px-3 py-2 bg-brand-cyan/5 border-b border-slate-700">
+                                <span className="text-[11px] text-slate-400 flex-shrink-0">筛选中</span>
+                                <div className="flex flex-wrap gap-1 flex-1">
+                                    {filters.requireDiffs.length > 0 && (
+                                        <span className="px-1.5 py-0.5 rounded bg-brand-cyan/15 text-brand-cyan text-[10px] font-semibold">
+                                            含 {filters.requireDiffs.join('/')}
+                                        </span>
+                                    )}
+                                    {(filters.levelMin || filters.levelMax) && (
+                                        <span className="px-1.5 py-0.5 rounded bg-brand-cyan/15 text-brand-cyan text-[10px] font-semibold">
+                                            定数 {filters.levelMin || '不限'} ~ {filters.levelMax || '不限'}
+                                        </span>
+                                    )}
+                                    {filters.charter && (
+                                        <span className="px-1.5 py-0.5 rounded bg-brand-cyan/15 text-brand-cyan text-[10px] font-semibold truncate max-w-[9rem]">
+                                            谱师 {filters.charter}
+                                        </span>
+                                    )}
+                                    {filters.composer && (
+                                        <span className="px-1.5 py-0.5 rounded bg-brand-cyan/15 text-brand-cyan text-[10px] font-semibold truncate max-w-[9rem]">
+                                            曲师 {filters.composer}
+                                        </span>
+                                    )}
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setFilters(emptyQuickFilters)}
+                                    className="text-slate-500 hover:text-slate-300 flex-shrink-0"
+                                    aria-label="清除筛选"
+                                >
+                                    <XMarkIcon className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        )}
                         {isSuggestion && displayedSongs.length > 0 && (
                             <div className="px-4 pt-3 pb-1 text-xs font-semibold text-slate-400 tracking-wide bg-slate-800 border-b border-slate-700">
                                 你是不是想找：
                             </div>
                         )}
-                        <ul ref={parentRef} className="max-h-60 overflow-y-auto relative" role="listbox">
+                        <ul ref={parentRef} className="max-h-60 overflow-y-auto custom-scrollbar relative" role="listbox">
                             {displayedSongs.length > 0 ? (
                                 <div
                                     style={{
@@ -237,13 +323,174 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
                                     })}
                                 </div>
                             ) : (
-                                <li className="px-4 py-3 text-center text-slate-500">未找到歌曲。</li>
+                                <li className="px-4 py-4 text-center">
+                                    <p className="text-slate-500 text-sm">未找到歌曲。</p>
+                                    {/* 区分「搜不到」和「筛选太严」，给出对应的下一步 */}
+                                    {activeFilterCount > 0 ? (
+                                        <>
+                                            <p className="text-xs text-slate-600 mt-1">
+                                                当前筛选下还有 {filteredSongs.length} 首，可以放宽条件试试。
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={() => setFilters(emptyQuickFilters)}
+                                                className="mt-2 text-xs text-brand-cyan hover:underline"
+                                            >
+                                                清除全部筛选
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <p className="text-xs text-slate-600 mt-1">换个关键词试试。</p>
+                                    )}
+                                </li>
                             )}
                         </ul>
                     </div>
                 )}
             </div>
             
+            <div ref={filterWrapperRef} className="relative">
+                <button
+                    type="button"
+                    onClick={() => setIsFilterOpen(!isFilterOpen)}
+                    className={`relative flex items-center justify-center w-14 h-14 rounded-xl border shadow-lg backdrop-blur-sm transition-colors duration-200 flex-shrink-0 ${
+                        activeFilterCount > 0
+                            ? 'border-brand-cyan bg-brand-cyan/15 text-brand-cyan'
+                            : isFilterOpen
+                                ? 'border-slate-700 bg-slate-700 text-slate-200'
+                                : 'border-slate-700 bg-slate-800/50 hover:bg-slate-800/80 text-slate-400'
+                    }`}
+                    title="按难度 / 谱师 / 曲师筛选"
+                    aria-haspopup="true"
+                    aria-expanded={isFilterOpen}
+                >
+                    <FunnelIcon className="w-6 h-6" />
+                    <span className="sr-only">筛选选项</span>
+                    {activeFilterCount > 0 && (
+                        <span
+                            className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-brand-cyan text-slate-900 text-[11px] font-bold flex items-center justify-center"
+                            aria-hidden="true"
+                        >
+                            {activeFilterCount}
+                        </span>
+                    )}
+                </button>
+
+                {isFilterOpen && (
+                    <div className="motion-dropdown absolute right-0 z-50 mt-2 w-72 rounded-xl border border-slate-700 bg-slate-800 shadow-2xl overflow-hidden">
+                        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700">
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">筛选</span>
+                            {activeFilterCount > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setFilters(emptyQuickFilters)}
+                                    className="text-xs text-slate-400 hover:text-brand-cyan flex items-center gap-1"
+                                >
+                                    <XMarkIcon className="w-3.5 h-3.5" />
+                                    清除
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="p-3 space-y-3 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                            {/* 难度 */}
+                            <div>
+                                <div className="px-1 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                    必须含难度
+                                </div>
+                                <div className="flex gap-1.5 mt-1">
+                                    {DIFFS.map(d => (
+                                        <button
+                                            key={d}
+                                            type="button"
+                                            onClick={() => toggleDiffFilter(d)}
+                                            className={`flex-1 py-1.5 text-xs font-semibold rounded-md border transition-colors ${
+                                                filters.requireDiffs.includes(d)
+                                                    ? 'border-brand-cyan text-brand-cyan bg-brand-cyan/10'
+                                                    : 'border-slate-600 text-slate-400 hover:border-slate-500'
+                                            }`}
+                                        >
+                                            {d}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 定数区间 */}
+                            <div>
+                                <div className="px-1 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                    定数区间
+                                </div>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <input
+                                        type="number"
+                                        inputMode="decimal"
+                                        value={filters.levelMin}
+                                        onChange={e => setFilter('levelMin', e.target.value)}
+                                        placeholder="最低"
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-cyan"
+                                    />
+                                    <span className="text-slate-600 text-xs flex-shrink-0">~</span>
+                                    <input
+                                        type="number"
+                                        inputMode="decimal"
+                                        value={filters.levelMax}
+                                        onChange={e => setFilter('levelMax', e.target.value)}
+                                        placeholder="最高"
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-cyan"
+                                    />
+                                </div>
+                                <p className="text-[11px] text-slate-600 mt-1 px-1">
+                                    任一难度落在区间内即命中
+                                </p>
+                            </div>
+
+                            {/* 谱师 */}
+                            <div>
+                                <div className="px-1 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                    谱师
+                                </div>
+                                <select
+                                    value={filters.charter}
+                                    onChange={e => setFilter('charter', e.target.value)}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-brand-cyan mt-1"
+                                >
+                                    <option value="">全部谱师</option>
+                                    {charterOptions.map(c => (
+                                        <option key={c.name} value={c.name}>
+                                            {c.name}（{c.count}）
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* 曲师 */}
+                            <div>
+                                <div className="px-1 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                    曲师
+                                </div>
+                                <select
+                                    value={filters.composer}
+                                    onChange={e => setFilter('composer', e.target.value)}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-brand-cyan mt-1"
+                                >
+                                    <option value="">全部曲师</option>
+                                    {composerOptions.map(c => (
+                                        <option key={c.name} value={c.name}>
+                                            {c.name}（{c.count}）
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="px-3 py-2 border-t border-slate-700 text-xs text-slate-500">
+                            命中 <span className="text-brand-cyan font-semibold">{filteredSongs.length}</span> / {songs.length} 首
+                        </div>
+                    </div>
+                )}
+            </div>
+
             <div ref={sortWrapperRef} className="relative">
                 <button
                     type="button"

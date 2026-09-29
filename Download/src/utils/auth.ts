@@ -3,7 +3,7 @@
 // ============================================================
 
 const TOKEN_KEY = 'access_token';
-const TOKEN_VALID_MS = 60 * 60 * 1000; // 有效期 1 小时
+const TOKEN_VALID_MS = 12 * 60 * 60 * 1000; // 有效期 12 小时
 
 /**
  * djb2 哈希算法（与答题系统 home.html 中的 simpleHash 完全一致）
@@ -56,7 +56,7 @@ export function verifyToken(): TokenValidationResult {
 
     if (now > expirationTime) {
         localStorage.removeItem(TOKEN_KEY);
-        return { valid: false, reason: '凭证已过期（超过1小时）' };
+        return { valid: false, reason: '凭证已过期（超过12小时）' };
     }
 
     const signString = `${timestamp}|${uid}`;

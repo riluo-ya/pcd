@@ -103,3 +103,16 @@ export const CheckIcon: React.FC<{ className?: string }> = ({ className }) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
     </svg>
 );
+
+export const FunnelIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 7.295 2.071C20.535 6.31 21 8.135 21 10.5c0 2.365-.465 4.19-1.705 5.429C17.455 17.768 14.755 18 12 18s-5.455-.232-7.295-2.071C3.465 14.69 3 12.865 3 10.5c0-2.365.465-4.19 1.705-5.429C6.545 3.232 9.245 3 12 3z" opacity="0" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 5h16.5M6 12h12M9.75 19h4.5" />
+    </svg>
+);
+
+export const XMarkIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+);

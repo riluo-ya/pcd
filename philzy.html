@@ -390,12 +390,12 @@
             const providedSig = parts[2];
 
             const now = Date.now();
-            // 有效期改为 1 小时 (60 * 60 * 1000)
-            const expirationTime = timestamp + (60 * 60 * 1000);
+            // 有效期 12 小时
+            const expirationTime = timestamp + (12 * 60 * 60 * 1000);
 
             if (now > expirationTime) {
                 localStorage.removeItem('access_token');
-                throw new Error('凭证已过期 (超过1小时)');
+                throw new Error('凭证已过期 (超过12小时)');
             }
 
             const signString = `${timestamp}|${uid}`;
