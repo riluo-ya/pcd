@@ -23,7 +23,7 @@ interface WorkerResponse {
 type ExportMessage =
     | { type: 'exportAllAssets'; files: FileInfo[]; selectedSong: Song }
     | { type: 'exportChart'; files: FileInfo[]; selectedSong: Song; selectedDifficulty: string | null; difficulties?: string[]; settings: Settings }
-    | { type: 'exportBulkAssets'; songs: Song[]; delaySeconds: number; difficultyScope?: string[] | null };
+    | { type: 'exportBulkAssets'; songs: Song[]; delaySeconds: number; difficultyScope?: string[] | null; packaging?: 'per-difficulty' | 'raw'; settings?: Settings };
 
 const runWorker = (
     message: ExportMessage, 
@@ -137,14 +137,18 @@ export const exportBulkAssets = async (
     onBulkProgress: (currentFile: string, action: 'Downloading' | 'Zipping' | 'Waiting', songsLeft: number, percent?: number) => void,
     signal?: AbortSignal,
     fileNameOverride?: string,
-    difficultyScope?: string[] | null
+    difficultyScope?: string[] | null,
+    packaging: 'per-difficulty' | 'raw' = 'per-difficulty',
+    settings?: Settings
 ): Promise<FailedFile[]> => {
     try {
         const { blob, fileName, failedFiles } = await runWorker({
             type: 'exportBulkAssets',
             songs,
             delaySeconds,
-            difficultyScope
+            difficultyScope,
+            packaging,
+            settings
         }, undefined, onBulkProgress, signal);
 
         FileSaver.saveAs(blob, fileNameOverride || fileName);

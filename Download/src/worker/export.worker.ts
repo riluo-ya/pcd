@@ -7,7 +7,7 @@ import { ghRaw } from '../utils/sources';
 export type ExportMessage =
     | { type: 'exportAllAssets'; files: FileInfo[]; selectedSong: Song }
     | { type: 'exportChart'; files: FileInfo[]; selectedSong: Song; selectedDifficulty: string | null; difficulties?: string[]; settings: Settings }
-    | { type: 'exportBulkAssets'; songs: Song[]; delaySeconds: number; difficultyScope?: string[] | null };
+    | { type: 'exportBulkAssets'; songs: Song[]; delaySeconds: number; difficultyScope?: string[] | null; packaging?: 'per-difficulty' | 'raw'; settings?: Settings };
 
 export type WorkerResponse =
     | { type: 'progress'; progress: number }
@@ -40,7 +40,13 @@ ctx.onmessage = async (event: MessageEvent<ExportMessage>) => {
                 event.data.difficulties
             );
         } else if (type === 'exportBulkAssets') {
-            await handleExportBulkAssets(event.data.songs, event.data.delaySeconds, event.data.difficultyScope ?? null);
+            await handleExportBulkAssets(
+                event.data.songs,
+                event.data.delaySeconds,
+                event.data.difficultyScope ?? null,
+                event.data.packaging ?? 'per-difficulty',
+                event.data.settings ?? DEFAULT_SETTINGS
+            );
         }
     } catch (error) {
         ctx.postMessage({ type: 'error', error: error instanceof Error ? error.message : String(error) });
@@ -49,6 +55,29 @@ ctx.onmessage = async (event: MessageEvent<ExportMessage>) => {
 
 
 const ALL_DIFFS = ['EZ', 'HD', 'IN', 'AT'];
+
+/** 调用方漏传设置时的兜底值，保证批量导出不至于直接报错 */
+const DEFAULT_SETTINGS: Settings = {
+    useZipFormat: false,
+    includeInfoYml: true,
+    disableDiscordNotifications: true,
+    exportIllustrationType: 'full',
+    useNewUi: false,
+    newUiAudioPreview: false,
+    newUiAudioVolume: 1,
+    newUiLoopAudio: false,
+    newUiShowVisualizer: false,
+    newUiVisualizerColor: 'gray',
+    newUiVisualizerHeight: 60,
+    newUiVisualizerOpacity: 60,
+    newUiSongSpecificEffects: false,
+    bulkDownloadMode: false,
+    shareCardEnabled: false,
+    shareCardBpm: false,
+    shareCardJudgeLines: false,
+    shareCardDuration: false,
+    shareCardNoteCounts: false,
+};
 
 /**
  * 判断某难度是否真实存在。
@@ -149,6 +178,28 @@ async function buildOneChartZip(
         throw new Error('Could not find all required files (chart, illustration, audio) for export.');
     }
 
+    const [chartBlob, illustrationBlob, audioBlob] = await Promise.all([
+        fetch(chartFile.url).then(res => res.blob()),
+        fetch(illustrationFile.url).then(res => res.blob()),
+        fetch(audioFile.url).then(res => res.blob()),
+    ]);
+
+    return composeChartZip(selectedSong, selectedDifficulty, chartBlob, illustrationBlob, audioBlob, settings);
+}
+
+/**
+ * 用现成的 blob 组装一个谱面包（.pez / .zip）。
+ * 单曲导出与批量导出共用：批量场景下资源只下载一次，再复用给每个难度，
+ * 避免同一个音频被重复请求 4 遍。
+ */
+async function composeChartZip(
+    selectedSong: Song,
+    selectedDifficulty: string,
+    chartBlob: Blob,
+    illustrationBlob: Blob,
+    audioBlob: Blob,
+    settings: Settings
+): Promise<{ blob: Blob; fileName: string; chartId: string }> {
     const chartId = Math.floor(1000000000000000 + Math.random() * 9000000000000000).toString();
     const charter = selectedSong.charters[selectedDifficulty as keyof typeof selectedSong.charters] || 'Pigeon Games';
 
@@ -181,12 +232,6 @@ Charter: {CHARTER}`;
         .replace('{LEVEL_STRING}', levelString)
         .replace('{COMPOSER}', selectedSong.composer)
         .replace('{CHARTER}', charter);
-
-    const [chartBlob, illustrationBlob, audioBlob] = await Promise.all([
-        fetch(chartFile.url).then(res => res.blob()),
-        fetch(illustrationFile.url).then(res => res.blob()),
-        fetch(audioFile.url).then(res => res.blob()),
-    ]);
 
     const zip = new JSZip();
     zip.file("info.txt", infoContent);
@@ -234,6 +279,11 @@ chartUpdated: null`;
     const fileName = `${safeSongName}_${selectedDifficulty}.${fileExtension}`;
 
     return { blob: zipBlob, fileName, chartId };
+}
+
+/** 谱面包的文件扩展名，统一走这里避免两处不一致 */
+function chartExt(settings: Settings): string {
+    return settings.useZipFormat ? 'zip' : 'pez';
 }
 
 /**
@@ -303,90 +353,140 @@ const handleExportChart = async (
     });
 };
 
-const handleExportBulkAssets = async (songs: Song[], delaySeconds: number, difficultyScope: string[] | null) => {
+/**
+ * 批量导出。
+ *
+ * 包结构（默认）：
+ *   曲名/
+ *   ├── 曲名_EZ.pez
+ *   ├── 曲名_HD.pez
+ *   └── 曲名_IN.pez
+ *
+ * 即每个难度一个可直接导入 Phira 的谱面包，而不是散装的资源文件。
+ * 代价是同一份曲绘/音频会在每个难度的包里各存一份，体积会变大；
+ * 想省体积可以切到 'raw' 模式（资源只存一份 + charts/*.json）。
+ *
+ * 资源每首歌只下载一次，再复用给所有难度，请求数不会因为打包方式而增加。
+ */
+const handleExportBulkAssets = async (
+    songs: Song[],
+    delaySeconds: number,
+    difficultyScope: string[] | null,
+    packaging: 'per-difficulty' | 'raw',
+    settings: Settings
+) => {
     const zip = new JSZip();
     const failedFiles: FailedFile[] = [];
 
+    const report = (msg: string, action: 'Downloading' | 'Waiting' | 'Zipping', left: number) => {
+        ctx.postMessage({ type: 'bulkProgress', currentFile: msg, action, songsLeft: left });
+    };
+
+    /** 下载一个文件，失败记进 failedFiles 并返回 null */
+    const tryFetch = async (url: string, song: Song, label: string): Promise<Blob | null> => {
+        try {
+            const res = await fetch(url, { referrerPolicy: 'no-referrer' });
+            if (res.ok) return await res.blob();
+            failedFiles.push({ songId: song.id, songName: song.name, fileType: label, url });
+        } catch (e) {
+            failedFiles.push({ songId: song.id, songName: song.name, fileType: label, url });
+        }
+        return null;
+    };
+
     for (let i = 0; i < songs.length; i++) {
         const song = songs[i];
-        const safeSongName = song.name.replace(/\s/g, '_').replace(/[<>:"/\\|?*]/g, '');
-        const songFolder = zip.folder(safeSongName);
-        if (!songFolder) continue;
-
-        const chartsFolder = songFolder.folder('charts');
-        if (!chartsFolder) continue;
-
+        const safeName = song.name.replace(/\s/g, '_').replace(/[<>:"/\\|?*]/g, '');
+        const folder = zip.folder(safeName);
+        if (!folder) continue;
         const songId = song.id;
-
-        // Files to try fetching
-        const filesToTry = [
-            { type: 'Illustration', name: 'illustration.png', url: ghRaw(`7aGiven/Phigros_Resource/refs/heads/illustration/${songId}.png`) },
-            { type: 'Illustration (Low-Res)', name: 'illustration_low.png', url: ghRaw(`7aGiven/Phigros_Resource/refs/heads/illustrationLowRes/${songId}.png`) },
-            { type: 'Illustration (Blur)', name: 'illustration_blur.png', url: ghRaw(`7aGiven/Phigros_Resource/refs/heads/illustrationBlur/${songId}.png`) },
-            { type: 'Audio', name: 'music.ogg', url: ghRaw(`7aGiven/Phigros_Resource/refs/heads/music/${songId}.ogg`) },
-        ];
+        const left = songs.length - i;
 
         // 只抓这首歌真实拥有的难度：全库 320 首里 271 首没有 AT，
         // 盲目试 4 个等于每轮多打 271 次必然 404 的请求，既慢又污染失败清单
         const difficulties = resolveDifficulties(song, difficultyScope);
-        difficulties.forEach(diff => {
-            filesToTry.push({
-                type: `Chart (${diff})`,
-                name: `${diff}.json`,
-                url: ghRaw(`7aGiven/Phigros_Resource/refs/heads/chart/${songId}.0/${diff}.json`)
-            });
-        });
 
-        for (const file of filesToTry) {
-            ctx.postMessage({ 
-                type: 'bulkProgress', 
-                currentFile: `${song.name} - ${file.type}`, 
-                action: 'Downloading', 
-                songsLeft: songs.length - i 
-            });
+        // ---- 共享资源：每首歌只下一次 ----
+        report(`${song.name} - 曲绘`, 'Downloading', left);
+        const illusUrl = ghRaw(`7aGiven/Phigros_Resource/refs/heads/illustration/${songId}.png`);
+        const illustration = await tryFetch(illusUrl, song, 'Illustration');
 
-            try {
-                const res = await fetch(file.url, { referrerPolicy: 'no-referrer' });
-                if (res.ok) {
-                    const blob = await res.blob();
-                    if (file.type.startsWith('Chart')) {
-                        chartsFolder.file(file.name, blob);
-                    } else {
-                        songFolder.file(file.name, blob);
+        report(`${song.name} - 音频`, 'Downloading', left);
+        const audioUrl = ghRaw(`7aGiven/Phigros_Resource/refs/heads/music/${songId}.ogg`);
+        const audio = await tryFetch(audioUrl, song, 'Audio');
+
+        if (packaging === 'raw') {
+            // 旧格式：资源平铺 + charts/ 目录放谱面 JSON，体积最小
+            if (illustration) folder.file('illustration.png', illustration);
+            if (audio) folder.file('music.ogg', audio);
+
+            report(`${song.name} - 曲绘（低清）`, 'Downloading', left);
+            const low = await tryFetch(
+                ghRaw(`7aGiven/Phigros_Resource/refs/heads/illustrationLowRes/${songId}.png`),
+                song, 'Illustration (Low-Res)'
+            );
+            if (low) folder.file('illustration_low.png', low);
+
+            report(`${song.name} - 曲绘（模糊）`, 'Downloading', left);
+            const blur = await tryFetch(
+                ghRaw(`7aGiven/Phigros_Resource/refs/heads/illustrationBlur/${songId}.png`),
+                song, 'Illustration (Blur)'
+            );
+            if (blur) folder.file('illustration_blur.png', blur);
+
+            const chartsFolder = folder.folder('charts');
+            for (const diff of difficulties) {
+                report(`${song.name} - Chart (${diff})`, 'Downloading', left);
+                const url = ghRaw(`7aGiven/Phigros_Resource/refs/heads/chart/${songId}.0/${diff}.json`);
+                const blob = await tryFetch(url, song, `Chart (${diff})`);
+                if (blob && chartsFolder) chartsFolder.file(`${diff}.json`, blob);
+            }
+        } else {
+            // 默认格式：每个难度一个独立的谱面包
+            // 曲绘/音频必须齐全才打得成包，缺了就退化为只放谱面 JSON
+            if (illustration && audio) {
+                for (const diff of difficulties) {
+                    report(`${song.name} - Chart (${diff})`, 'Downloading', left);
+                    const url = ghRaw(`7aGiven/Phigros_Resource/refs/heads/chart/${songId}.0/${diff}.json`);
+                    const chart = await tryFetch(url, song, `Chart (${diff})`);
+                    if (!chart) continue;
+                    try {
+                        const { blob, fileName } = await composeChartZip(
+                            song, diff, chart, illustration, audio, settings
+                        );
+                        folder.file(fileName, blob);
+                    } catch (e) {
+                        // 组装失败也别整批中断，退回裸 JSON 至少还有谱面
+                        console.warn(`[bulk] ${song.name} ${diff} 打包失败，退回裸 JSON：`, e);
+                        folder.file(`${safeName}_${diff}.json`, chart);
                     }
-                } else {
-                    failedFiles.push({ songId, songName: song.name, fileType: file.type, url: file.url });
                 }
-            } catch (e) {
-                // 单个文件失败不中断整批，记录下来交给调用方提示 / 重试
-                failedFiles.push({ songId, songName: song.name, fileType: file.type, url: file.url });
+            } else {
+                // 资源不全：把能拿到的谱面单独放出来，不至于整首消失
+                const chartsFolder = folder.folder('charts');
+                for (const diff of difficulties) {
+                    report(`${song.name} - Chart (${diff})`, 'Downloading', left);
+                    const url = ghRaw(`7aGiven/Phigros_Resource/refs/heads/chart/${songId}.0/${diff}.json`);
+                    const blob = await tryFetch(url, song, `Chart (${diff})`);
+                    if (blob && chartsFolder) chartsFolder.file(`${diff}.json`, blob);
+                }
             }
         }
 
         // Apply delay between songs (except for the last song)
         if (i < songs.length - 1 && delaySeconds > 0) {
-            ctx.postMessage({ 
-                type: 'bulkProgress', 
-                currentFile: `距离下一首歌曲还有 ${delaySeconds} 秒...`, 
-                action: 'Waiting', 
-                songsLeft: songs.length - i - 1 
-            });
+            report(`距离下一首歌曲还有 ${delaySeconds} 秒...`, 'Waiting', songs.length - i - 1);
             await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
         }
     }
 
-    ctx.postMessage({ 
-        type: 'bulkProgress', 
-        currentFile: '所有文件已下载', 
-        action: 'Zipping', 
-        songsLeft: 0 
-    });
+    report('所有文件已下载', 'Zipping', 0);
 
     const zipBlob = await zip.generateAsync({ type: 'blob' }, (metadata) => {
-        ctx.postMessage({ 
-            type: 'bulkProgress', 
-            currentFile: '正在压缩...', 
-            action: 'Zipping', 
+        ctx.postMessage({
+            type: 'bulkProgress',
+            currentFile: '正在压缩...',
+            action: 'Zipping',
             songsLeft: 0,
             percent: metadata.percent
         });
@@ -394,3 +494,4 @@ const handleExportBulkAssets = async (songs: Song[], delaySeconds: number, diffi
 
     ctx.postMessage({ type: 'complete', blob: zipBlob, fileName: 'Phigros_All_Assets.zip', failedFiles });
 };
+

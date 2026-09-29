@@ -8,7 +8,11 @@ export const DIFFS = ['EZ', 'HD', 'IN', 'AT'] as const;
 /** 难度显示名，如需本地化可在此调整 */
 export const DIFF_LABEL: Record<string, string> = { EZ: 'EZ', HD: 'HD', IN: 'IN', AT: 'AT' };
 
-/** 每首歌会尝试抓取的文件数：3 张曲绘 + 音频 + 4 个难度谱面 */
+/**
+ * 每首歌最多会抓取的文件数：3 张曲绘 + 音频 + 4 个难度谱面。
+ * 实际请求数通常更少 —— 谱面只下真实存在的难度，
+ * 而「每难度独立包」模式只需要 1 张曲绘，不下载低清与模糊版本。
+ */
 export const FILES_PER_SONG = 8;
 
 /** 难度配色，沿用 Phigros 玩家熟悉的 EZ绿 / HD蓝 / IN紫 / AT红 */

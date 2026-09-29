@@ -15,6 +15,7 @@ import {
     DIFF_COLOR,
 } from '../utils/bulkFilters';
 import { ChartStats, scanChartStats } from '../utils/chartStats';
+import { useSettings } from '../contexts/SettingsContext';
 import { exportBulkAssets } from '../utils/export';
 import type { FailedFile } from '../worker/export.worker';
 
@@ -105,6 +106,8 @@ const ChipToggle: React.FC<{
 // ================= 主组件 =================
 
 export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isLoading, error, onExit }) => {
+    // 打包谱面包时需要用到导出格式（.pez / .zip）与是否附带 info.yml
+    const { settings } = useSettings();
     const [filters, setFilters] = useState<Filters>(emptyFilters);
     const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -116,6 +119,8 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     /** 导出难度范围：null/空 = 每首歌的全部难度 */
     const [exportDiffs, setExportDiffs] = useState<string[]>([]);
+    /** 打包方式：每难度独立谱面包（默认）/ 原始资源平铺 */
+    const [packaging, setPackaging] = useState<'per-difficulty' | 'raw'>('per-difficulty');
     const [batchSize, setBatchSize] = useState<string>('50');
     const [delay, setDelay] = useState<string>('0.6');
 
@@ -219,9 +224,11 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
 
     // 预计：每首 8 个请求 + 歌曲间延迟
     const delaySec = Math.max(0, Number(delay) || 0);
-    // 谱面请求数按「每首歌实际要下的难度数」算，而不是一律 4
+    // 谱面请求数按「每首歌实际要下的难度数」算，而不是一律 4；
+    // 非谱面资源则看打包方式：每难度独立包只需要 1 张曲绘 + 音频，平铺模式要全部 3 张曲绘
+    const sharedPerSong = packaging === 'per-difficulty' ? 2 : (FILES_PER_SONG - 4);
     const estRequests = selectedSongs.reduce(
-        (sum, s) => sum + (FILES_PER_SONG - 4) + countExportDiffs(s, exportDiffs),
+        (sum, s) => sum + sharedPerSong + countExportDiffs(s, exportDiffs),
         0
     );
     const estSeconds = Math.round(selectedSongs.length * (1.2 + delaySec));
@@ -282,7 +289,9 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
                         }),
                     ctrl.signal,
                     name,
-                    exportDiffs.length > 0 ? exportDiffs : null
+                    exportDiffs.length > 0 ? exportDiffs : null,
+                    packaging,
+                    settings
                 );
                 collected.push(...failed);
             }
@@ -693,6 +702,28 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
                     <p className="text-[11px] text-slate-600 mt-1.5">
                         默认导出每首歌的全部难度；只想练某个难度时可单独指定，
                         不存在的难度会自动跳过。
+                    </p>
+                </div>
+
+                {/* 打包方式 */}
+                <div className="rounded-lg border border-slate-700/50 px-3 py-2.5">
+                    <div className="text-sm font-semibold text-slate-200 mb-2">打包方式</div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        <ChipToggle
+                            label="每难度独立谱面包"
+                            active={packaging === 'per-difficulty'}
+                            onClick={() => setPackaging('per-difficulty')}
+                        />
+                        <ChipToggle
+                            label="原始资源平铺"
+                            active={packaging === 'raw'}
+                            onClick={() => setPackaging('raw')}
+                        />
+                    </div>
+                    <p className="text-[11px] text-slate-600 mt-1.5">
+                        {packaging === 'per-difficulty'
+                            ? '每个难度一个 .pez / .zip，解压后可直接导入 Phira。曲绘与音频会在每个难度的包里各存一份，体积较大。'
+                            : '曲绘与音频各存一份，谱面 JSON 放在 charts/ 目录。体积最小，但需要自己组装后才能导入。'}
                     </p>
                 </div>
 
