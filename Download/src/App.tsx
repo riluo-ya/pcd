@@ -20,10 +20,11 @@ import { AudioPlayerControl } from './components/AudioPlayerControl';
 import { Song, FileInfo, SortConfig } from './types';
 import { fetchVersion, fetchSongs } from './utils/api';
 import { ghRaw } from './utils/sources';
-import { exportAllAssets, exportChart, exportBulkAssets } from './utils/export';
+import { exportAllAssets, exportChart } from './utils/export';
+import { BulkDownloadPanel } from './components/BulkDownloadPanel';
 
 const App: React.FC = () => {
-    const { settings } = useSettings();
+    const { settings, setSettings } = useSettings();
     const [version, setVersion] = useState<string | null>(null);
     const [isLoadingVersion, setIsLoadingVersion] = useState<boolean>(true);
     const [errorVersion, setErrorVersion] = useState<string | null>(null);
@@ -38,15 +39,6 @@ const App: React.FC = () => {
     const [availableDifficulties, setAvailableDifficulties] = useState<string[]>([]);
     const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null);
     const [exportState, setExportState] = useState<{ type: 'phira' | 'chart' | null; progress: number }>({ type: null, progress: 0 });
-    const [bulkExportState, setBulkExportState] = useState<{
-        isExporting: boolean;
-        currentFile: string;
-        action: 'Downloading' | 'Zipping' | 'Waiting' | null;
-        songsLeft: number;
-        percent: number;
-    }>({ isExporting: false, currentFile: '', action: null, songsLeft: 0, percent: 0 });
-    const [bulkDelay, setBulkDelay] = useState<string>('0');
-    const [bulkLimit, setBulkLimit] = useState<string>('');
     const [blacklistWarning, setBlacklistWarning] = useState<(BlacklistEntry & { exportType: 'phira' | 'chart' }) | null>(null);
     const [showDifficultyWarning, setShowDifficultyWarning] = useState<boolean>(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -55,7 +47,6 @@ const App: React.FC = () => {
     const [isSourceOpen, setIsSourceOpen] = useState(false);
     const [isShareCardOpen, setIsShareCardOpen] = useState(false);
     
-    const abortControllerRef = useRef<AbortController | null>(null);
 
     // Background and Audio management
     const [bgImage, setBgImage] = useState<string | null>(null);
@@ -304,75 +295,6 @@ const App: React.FC = () => {
         }
     };
 
-    const handleBulkExport = async () => {
-        if (bulkExportState.isExporting || songs.length === 0) return;
-
-        const parsedLimit = parseInt(bulkLimit, 10);
-        const limit = !isNaN(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, songs.length) : songs.length;
-        const songsToExport = songs.slice(0, limit);
-
-        setBulkExportState({
-            isExporting: true,
-            currentFile: '正在启动...',
-            action: 'Downloading',
-            songsLeft: songsToExport.length,
-            percent: 0
-        });
-
-        abortControllerRef.current = new AbortController();
-
-        try {
-            const delaySeconds = parseFloat(bulkDelay) || 0;
-            await exportBulkAssets(songsToExport, delaySeconds, (currentFile, action, songsLeft, percent) => {
-                setBulkExportState(prev => ({
-                    ...prev,
-                    currentFile,
-                    action,
-                    songsLeft,
-                    percent: percent || 0
-                }));
-            }, abortControllerRef.current.signal);
-        } catch (error) {
-            if (error instanceof Error && error.name === 'AbortError') {
-                // Ignore abort errors
-            } else {
-                console.error("Bulk export failed: ", error);
-                alert("批量导出过程中发生错误。请查看控制台获取更多信息。");
-            }
-        } finally {
-            setBulkExportState({
-                isExporting: false,
-                currentFile: '',
-                action: null,
-                songsLeft: 0,
-                percent: 0
-            });
-            abortControllerRef.current = null;
-        }
-    };
-
-    const cancelBulkExport = useCallback(() => {
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-            abortControllerRef.current = null;
-        }
-    }, []);
-
-    // Cancel bulk export when exiting bulk download mode
-    useEffect(() => {
-        if (!settings.bulkDownloadMode) {
-            cancelBulkExport();
-        }
-    }, [settings.bulkDownloadMode, cancelBulkExport]);
-
-    const translateBulkAction = (action: string | null): string => {
-        switch (action) {
-            case 'Downloading': return '下载中';
-            case 'Zipping': return '压缩中';
-            case 'Waiting': return '等待中';
-            default: return action || '';
-        }
-    };
 
     const handleBlacklistConfirm = () => {
         if (!blacklistWarning) return;
@@ -482,106 +404,12 @@ const App: React.FC = () => {
 
                     <main className="mt-8">
                         {settings.bulkDownloadMode ? (
-                            <div className="flex flex-col items-center justify-center p-8 bg-slate-800/50 rounded-xl border border-slate-700/50 text-center animate-fade-in w-full max-w-2xl mx-auto">
-                                <p className="text-lg font-semibold text-slate-200">批量下载模式已启用</p>
-                                <p className="text-xs text-slate-400 mt-2 mb-6">要返回正常页面，请在设置中禁用「批量下载模式」。此功能正在开发中，尚未完成！</p>
-                                
-                                <div className="flex flex-col items-center w-full max-w-md gap-4 mb-4">
-                                    <div className="flex flex-col items-start w-full">
-                                        <label htmlFor="bulkDelay" className="text-sm text-slate-300 mb-1">
-                                            人工延迟（秒）
-                                        </label>
-                                        <div className="flex w-full items-center gap-2">
-                                            <input
-                                                id="bulkDelay"
-                                                type="number"
-                                                min="0"
-                                                step="0.5"
-                                                value={bulkDelay}
-                                                onChange={(e) => setBulkDelay(e.target.value)}
-                                                disabled={bulkExportState.isExporting}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-brand-cyan disabled:opacity-50"
-                                                placeholder="0"
-                                            />
-                                            <span className="text-xs text-slate-500 whitespace-nowrap">
-                                                在歌曲之间暂停以避免速率限制。<br/>GitHub 有非官方的速率限制：5000次请求/小时。
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col items-start w-full">
-                                        <label htmlFor="bulkLimit" className="text-sm text-slate-300 mb-1">
-                                            要下载的歌曲数量（最多：{songs.length}）
-                                        </label>
-                                        <div className="flex w-full items-center gap-2">
-                                            <input
-                                                id="bulkLimit"
-                                                type="number"
-                                                min="1"
-                                                max={songs.length}
-                                                value={bulkLimit}
-                                                onChange={(e) => setBulkLimit(e.target.value)}
-                                                disabled={bulkExportState.isExporting || songs.length === 0}
-                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-brand-cyan disabled:opacity-50"
-                                                placeholder={songs.length.toString()}
-                                            />
-                                            <span className="text-xs text-slate-500 whitespace-nowrap">
-                                                限制要下载的歌曲数量以进行测试。
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="flex w-full max-w-md gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={handleBulkExport}
-                                        disabled={bulkExportState.isExporting || songs.length === 0}
-                                        className={`relative overflow-hidden px-6 py-3 font-bold rounded-lg shadow-md transition-colors duration-200 flex items-center justify-center gap-2 flex-grow ${
-                                            bulkExportState.isExporting || songs.length === 0
-                                                ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                                                : 'bg-brand-cyan hover:bg-cyan-400 text-slate-900'
-                                        }`}
-                                    >
-                                        {bulkExportState.isExporting ? (
-                                            <>
-                                                <Spinner />
-                                                <span>处理中...</span>
-                                            </>
-                                        ) : (
-                                            '导出所有歌曲的全部资源'
-                                        )}
-                                        {bulkExportState.isExporting && bulkExportState.action === 'Zipping' && (
-                                            <div 
-                                                className="absolute bottom-0 left-0 h-1 bg-brand-purple transition-all duration-150"
-                                                style={{ width: `${bulkExportState.percent.toFixed(0)}%` }}
-                                            />
-                                        )}
-                                    </button>
-                                    
-                                    {bulkExportState.isExporting && (
-                                        <button
-                                            type="button"
-                                            onClick={cancelBulkExport}
-                                            className="px-4 py-3 font-bold rounded-lg shadow-md transition-colors duration-200 flex items-center justify-center bg-red-600 hover:bg-red-700 text-white"
-                                            title="取消导出"
-                                        >
-                                            取消
-                                        </button>
-                                    )}
-                                </div>
-
-                                {bulkExportState.isExporting && (
-                                    <div className="mt-6 w-full max-w-md text-left bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                                        <div className="flex justify-between text-sm mb-2">
-                                            <span className="text-slate-300 font-medium">操作：<span className="text-brand-cyan">{translateBulkAction(bulkExportState.action)}</span></span>
-                                            <span className="text-slate-400">剩余歌曲：{bulkExportState.songsLeft}</span>
-                                        </div>
-                                        <div className="text-xs text-slate-500 truncate" title={bulkExportState.currentFile}>
-                                            文件：{bulkExportState.currentFile}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                            <BulkDownloadPanel
+                                songs={sortedSongs}
+                                isLoading={isLoadingSongs}
+                                error={errorSongs}
+                                onExit={() => setSettings(prev => ({ ...prev, bulkDownloadMode: false }))}
+                            />
                         ) : (
                             <div className="flex flex-col items-center gap-8 animate-fade-in">
                                

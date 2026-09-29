@@ -12,8 +12,16 @@ export type ExportMessage =
 export type WorkerResponse =
     | { type: 'progress'; progress: number }
     | { type: 'bulkProgress'; currentFile: string; action: 'Downloading' | 'Zipping' | 'Waiting'; songsLeft: number; percent?: number }
-    | { type: 'complete'; blob: Blob; fileName: string; chartId?: string }
+    | { type: 'complete'; blob: Blob; fileName: string; chartId?: string; failedFiles?: FailedFile[] }
     | { type: 'error'; error: string };
+
+/** 单个文件下载失败的记录，供调用方提示与重试 */
+export interface FailedFile {
+    songId: string;
+    songName: string;
+    fileType: string;
+    url: string;
+}
 
 const ctx: Worker = self as unknown as Worker;
 
@@ -191,6 +199,7 @@ chartUpdated: null`;
 
 const handleExportBulkAssets = async (songs: Song[], delaySeconds: number) => {
     const zip = new JSZip();
+    const failedFiles: FailedFile[] = [];
 
     for (let i = 0; i < songs.length; i++) {
         const song = songs[i];
@@ -237,9 +246,12 @@ const handleExportBulkAssets = async (songs: Song[], delaySeconds: number) => {
                     } else {
                         songFolder.file(file.name, blob);
                     }
+                } else {
+                    failedFiles.push({ songId, songName: song.name, fileType: file.type, url: file.url });
                 }
             } catch (e) {
-                // Ignore fetch errors for individual files
+                // 单个文件失败不中断整批，记录下来交给调用方提示 / 重试
+                failedFiles.push({ songId, songName: song.name, fileType: file.type, url: file.url });
             }
         }
 
@@ -272,5 +284,5 @@ const handleExportBulkAssets = async (songs: Song[], delaySeconds: number) => {
         });
     });
 
-    ctx.postMessage({ type: 'complete', blob: zipBlob, fileName: 'Phigros_All_Assets.zip' });
+    ctx.postMessage({ type: 'complete', blob: zipBlob, fileName: 'Phigros_All_Assets.zip', failedFiles });
 };

@@ -3,6 +3,7 @@ import FileSaver from 'file-saver';
 import { FileInfo, Song } from '../types';
 import { Settings } from '../defaultSettings';
 import { sendAllAssetsDownloadNotification, sendChartDownloadNotification } from './api';
+import type { FailedFile } from '../worker/export.worker';
 
 // Worker interface (matching the worker definition)
 interface WorkerResponse {
@@ -16,6 +17,7 @@ interface WorkerResponse {
     fileName?: string;
     chartId?: string;
     error?: string;
+    failedFiles?: FailedFile[];
 }
 
 type ExportMessage =
@@ -28,7 +30,7 @@ const runWorker = (
     onProgress?: (progress: number) => void,
     onBulkProgress?: (currentFile: string, action: 'Downloading' | 'Zipping' | 'Waiting', songsLeft: number, percent?: number) => void,
     signal?: AbortSignal
-): Promise<{ blob: Blob, fileName: string, chartId?: string }> => {
+): Promise<{ blob: Blob, fileName: string, chartId?: string, failedFiles?: FailedFile[] }> => {
     return new Promise((resolve, reject) => {
         const worker = new Worker(new URL('../worker/export.worker.ts', import.meta.url), { type: 'module' });
 
@@ -48,7 +50,7 @@ const runWorker = (
         }
 
         worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
-            const { type, progress, currentFile, action, songsLeft, percent, blob, fileName, chartId, error } = event.data;
+            const { type, progress, currentFile, action, songsLeft, percent, blob, fileName, chartId, failedFiles, error } = event.data;
 
             if (type === 'progress' && progress !== undefined && onProgress) {
                 onProgress(progress);
@@ -56,7 +58,7 @@ const runWorker = (
                 onBulkProgress(currentFile, action, songsLeft, percent);
             } else if (type === 'complete' && blob && fileName) {
                 if (signal) signal.removeEventListener('abort', onAbort);
-                resolve({ blob, fileName, chartId });
+                resolve({ blob, fileName, chartId, failedFiles });
                 worker.terminate();
             } else if (type === 'error') {
                 if (signal) signal.removeEventListener('abort', onAbort);
@@ -130,20 +132,22 @@ export const exportBulkAssets = async (
     songs: Song[],
     delaySeconds: number,
     onBulkProgress: (currentFile: string, action: 'Downloading' | 'Zipping' | 'Waiting', songsLeft: number, percent?: number) => void,
-    signal?: AbortSignal
-) => {
+    signal?: AbortSignal,
+    fileNameOverride?: string
+): Promise<FailedFile[]> => {
     try {
-        const { blob, fileName } = await runWorker({
+        const { blob, fileName, failedFiles } = await runWorker({
             type: 'exportBulkAssets',
             songs,
             delaySeconds
         }, undefined, onBulkProgress, signal);
 
-        FileSaver.saveAs(blob, fileName);
+        FileSaver.saveAs(blob, fileNameOverride || fileName);
+        return failedFiles || [];
     } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
             console.log("Bulk export cancelled.");
-            return;
+            return [];
         }
         console.error("Bulk export failed:", error);
         throw error;

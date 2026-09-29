@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Song } from '../types';
 import { ghRaw } from '../utils/sources';
 import { useSettings } from '../contexts/SettingsContext';
+import { ChartStats, fetchChartStats, primaryDifficulty } from '../utils/chartStats';
 import {
     CARD_THEMES,
     CardThemeId,
@@ -19,66 +20,6 @@ interface ShareCardPopupProps {
 }
 
 const DIFFS = ['EZ', 'HD', 'IN', 'AT'] as const;
-
-/** 谱面 JSON 里能拿到的东西 */
-interface ChartStats {
-    /** 物量 */
-    notes: number;
-    /** BPM，取第一条判定线 */
-    bpm: number | null;
-    /** 判定线数量 */
-    judgeLines: number;
-    /** 时长（秒），按 1/32 拍换算 */
-    duration: number | null;
-}
-
-/**
- * 下载并解析一个谱面 JSON。
- *
- * 时长换算：谱面里 time 的单位是 1/32 拍，配合判定线 bpm 换算成秒。
- * 用 Credits(1:38) / Dlyrotz(2:01) 两首比对过实际曲长，误差在几秒内。
- */
-async function fetchChartStats(
-    songId: string,
-    diff: string
-): Promise<ChartStats | null> {
-    try {
-        const url = ghRaw(`7aGiven/Phigros_Resource/refs/heads/chart/${songId}.0/${diff}.json`);
-        const res = await fetch(url, { cache: 'no-store' });
-        if (!res.ok) return null;
-        const data = await res.json();
-        const lines = data?.judgeLineList;
-        if (!Array.isArray(lines) || lines.length === 0) return null;
-
-        let notes = 0;
-        let lastTime = 0;
-        for (const line of lines) {
-            for (const key of ['notesAbove', 'notesBelow'] as const) {
-                const arr = line?.[key];
-                if (!Array.isArray(arr)) continue;
-                notes += arr.length;
-                for (const n of arr) {
-                    const t = typeof n?.time === 'number' ? n.time : 0;
-                    if (t > lastTime) lastTime = t;
-                }
-            }
-        }
-
-        // BPM：各判定线通常一致，取第一条非零的
-        let bpm: number | null = null;
-        for (const line of lines) {
-            const b = typeof line?.bpm === 'number' ? line.bpm : 0;
-            if (b > 0) { bpm = b; break; }
-        }
-
-        // time 单位为 1/32 拍 → 拍数 = lastTime / 32 → 秒 = 拍数 / bpm * 60
-        const duration = bpm && lastTime > 0 ? (lastTime / 32) * (60 / bpm) : null;
-
-        return { notes, bpm, judgeLines: lines.length, duration };
-    } catch {
-        return null;
-    }
-}
 
 /** 尝试加载一张跨域图片，成功返回 Image，失败返回 null */
 function loadImage(url: string): Promise<HTMLImageElement | null> {
@@ -213,7 +154,7 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
             );
 
             // BPM / 判定线 / 时长属于曲目级信息，优先取最高难度那份
-            const highest = [...DIFFS].reverse().find(d => statsByDiff[d]);
+            const highest = primaryDifficulty(song) || [...DIFFS].reverse().find(d => statsByDiff[d]);
             const s = highest ? statsByDiff[highest] : null;
 
             if (!cancelled && aliveRef.current) {
