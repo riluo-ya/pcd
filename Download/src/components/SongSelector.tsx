@@ -7,6 +7,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { getSongEffect } from '../song-effects';
 import { Song, SortConfig, SortType, SortDirection } from '../types';
 import { ChevronDownIcon, ErrorIcon, MagnifyingGlassIcon, ArrowsUpDownIcon, CheckIcon, FunnelIcon, XMarkIcon } from './Icons';
+import { NameCombobox } from './NameCombobox';
 import {
     QuickFilters,
     emptyQuickFilters,
@@ -447,40 +448,42 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
 
                             {/* 谱师 */}
                             <div>
-                                <div className="px-1 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                    谱师
+                                <div className="flex items-center justify-between px-1 py-1">
+                                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                        谱师
+                                    </span>
+                                    <span className="text-[10px] text-slate-600">
+                                        共 {charterOptions.length} 位
+                                    </span>
                                 </div>
-                                <select
-                                    value={filters.charter}
-                                    onChange={e => setFilter('charter', e.target.value)}
-                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-brand-cyan mt-1"
-                                >
-                                    <option value="">全部谱师</option>
-                                    {charterOptions.map(c => (
-                                        <option key={c.name} value={c.name}>
-                                            {c.name}（{c.count}）
-                                        </option>
-                                    ))}
-                                </select>
+                                <div className="mt-1">
+                                    <NameCombobox
+                                        placeholder="输入或选择谱师"
+                                        options={charterOptions}
+                                        value={filters.charter}
+                                        onChange={v => setFilter('charter', v)}
+                                    />
+                                </div>
                             </div>
 
                             {/* 曲师 */}
                             <div>
-                                <div className="px-1 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                    曲师
+                                <div className="flex items-center justify-between px-1 py-1">
+                                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                        曲师
+                                    </span>
+                                    <span className="text-[10px] text-slate-600">
+                                        共 {composerOptions.length} 位
+                                    </span>
                                 </div>
-                                <select
-                                    value={filters.composer}
-                                    onChange={e => setFilter('composer', e.target.value)}
-                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-brand-cyan mt-1"
-                                >
-                                    <option value="">全部曲师</option>
-                                    {composerOptions.map(c => (
-                                        <option key={c.name} value={c.name}>
-                                            {c.name}（{c.count}）
-                                        </option>
-                                    ))}
-                                </select>
+                                <div className="mt-1">
+                                    <NameCombobox
+                                        placeholder="输入或选择曲师"
+                                        options={composerOptions}
+                                        value={filters.composer}
+                                        onChange={v => setFilter('composer', v)}
+                                    />
+                                </div>
                             </div>
                         </div>
 

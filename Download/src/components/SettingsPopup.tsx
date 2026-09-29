@@ -120,8 +120,8 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({ isOpen, onClose })
         setSettings(prev => ({ ...prev, includeInfoYml: !prev.includeInfoYml }));
     };
 
-    const handleChangeExportIllustrationType = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        setSettings(prev => ({ ...prev, exportIllustrationType: e.target.value as 'full' | 'blur' }));
+    const handleChangeExportIllustrationType = (value: 'full' | 'blur') => {
+        setSettings(prev => ({ ...prev, exportIllustrationType: value }));
     };
 
     const handleToggleDiscordNotifications = () => {
@@ -241,14 +241,32 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({ isOpen, onClose })
                              <p className="font-semibold text-slate-200">导出图片类型</p>
                              <p className="text-sm text-slate-400">决定导出谱面时曲绘使用的质量。建议保持为「原始尺寸」。</p>
                         </div>
-                        <select 
-                            value={settings.exportIllustrationType} 
-                            onChange={handleChangeExportIllustrationType}
-                            className="bg-slate-800 border border-slate-600 text-slate-200 text-sm rounded px-3 py-2 focus:outline-none focus:border-brand-cyan cursor-pointer"
+                        {/* 只有两个选项，用分段控件比下拉更快，也避免浏览器原生样式 */}
+                        <div
+                            role="radiogroup"
+                            aria-label="导出图片类型"
+                            className="flex flex-shrink-0 rounded-lg border border-slate-600 bg-slate-900/60 p-0.5"
                         >
-                            <option value="full">原始尺寸</option>
-                            <option value="blur">模糊</option>
-                        </select>
+                            {([
+                                { value: 'full', label: '原始尺寸' },
+                                { value: 'blur', label: '模糊' },
+                            ] as const).map(opt => (
+                                <button
+                                    key={opt.value}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={settings.exportIllustrationType === opt.value}
+                                    onClick={() => handleChangeExportIllustrationType(opt.value)}
+                                    className={`px-3 py-1.5 text-sm rounded-md transition-colors duration-150 ${
+                                        settings.exportIllustrationType === opt.value
+                                            ? 'bg-brand-cyan text-slate-900 font-semibold'
+                                            : 'text-slate-400 hover:text-slate-200'
+                                    }`}
+                                >
+                                    {opt.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                     <div className="flex items-center justify-between">
                         <div>

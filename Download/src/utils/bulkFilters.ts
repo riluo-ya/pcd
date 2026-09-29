@@ -262,3 +262,58 @@ export function collectComposers(songs: Song[]): { name: string; count: number }
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
+
+// ================= 名称选择器（谱师 / 曲师）的纯逻辑 =================
+// 抽出来单独测：这些规则靠手点很难覆盖，尤其是大小写和回退行为。
+
+export interface NameOption {
+    name: string;
+    count: number;
+}
+
+/**
+ * 按关键词过滤候选：前缀匹配的排前面，其余按作品数降序。
+ * 返回前 limit 个，以及匹配总数（用于提示「还有 N 个未显示」）。
+ */
+export function filterNameOptions(
+    options: NameOption[],
+    keyword: string,
+    limit = 100
+): { list: NameOption[]; total: number } {
+    const kw = keyword.trim().toLowerCase();
+    const matched = kw
+        ? options.filter(o => o.name.toLowerCase().includes(kw))
+        : options;
+
+    const list = kw
+        ? [...matched].sort((a, b) => {
+            const an = a.name.toLowerCase();
+            const bn = b.name.toLowerCase();
+            // 前缀匹配优先，其次作品数多的优先
+            return (an.startsWith(kw) ? 0 : 1) - (bn.startsWith(kw) ? 0 : 1)
+                || b.count - a.count;
+        })
+        : matched;
+
+    return { list: list.slice(0, limit), total: matched.length };
+}
+
+/**
+ * 输入框失焦时确认最终值：
+ * - 空 → 清除筛选
+ * - 精确命中某个候选 → 选中它
+ * - 其它（打了一半或名字不存在）→ 回退到已选值
+ *
+ * 第三条很关键：否则会留下「筛不出东西但看不出原因」的死状态。
+ * 注意这里是精确匹配（区分大小写），和输入时的「包含」匹配不同。
+ */
+export function resolveNameCommit(
+    options: NameOption[],
+    draft: string,
+    currentValue: string
+): string {
+    const kw = draft.trim();
+    if (!kw) return '';
+    const exact = options.find(o => o.name === kw);
+    return exact ? exact.name : currentValue;
+}
