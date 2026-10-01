@@ -267,6 +267,11 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
                                             定数 {filters.levelMin || '不限'} ~ {filters.levelMax || '不限'}
                                         </span>
                                     )}
+                                    {filters.levels && (
+                                        <span className="px-1.5 py-0.5 rounded bg-brand-cyan/15 text-brand-cyan text-[10px] font-semibold">
+                                            定数 = {filters.levels}
+                                        </span>
+                                    )}
                                     {filters.charter && (
                                         <span className="px-1.5 py-0.5 rounded bg-brand-cyan/15 text-brand-cyan text-[10px] font-semibold truncate max-w-[9rem]">
                                             谱师 {filters.charter}
@@ -417,6 +422,24 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
                                 </div>
                             </div>
 
+                            {/* 指定定数 */}
+                            <div>
+                                <div className="px-1 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                    指定定数
+                                </div>
+                                <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={filters.levels}
+                                    onChange={e => setFilter('levels', e.target.value)}
+                                    placeholder="如 17、17.6、15.3"
+                                    className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-cyan"
+                                />
+                                <p className="text-[11px] text-slate-600 mt-1 px-1">
+                                    精确定数，可带小数也可不带；多个用逗号分隔，如 15.3, 17.6
+                                </p>
+                            </div>
+
                             {/* 定数区间 */}
                             <div>
                                 <div className="px-1 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
@@ -442,7 +465,7 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
                                     />
                                 </div>
                                 <p className="text-[11px] text-slate-600 mt-1 px-1">
-                                    任一难度落在区间内即命中
+                                    任一难度落在区间内即命中；与「指定定数」同时填写时需两者都满足
                                 </p>
                             </div>
 

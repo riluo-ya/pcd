@@ -396,6 +396,17 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
 
                         {/* 定数 */}
                         <div className="rounded-lg bg-slate-900/40 border border-slate-700/50 p-3 space-y-2">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-400 w-10 flex-shrink-0">指定值</span>
+                                <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={filters.levels}
+                                    onChange={e => set('levels', e.target.value)}
+                                    placeholder="如 17、17.6、15.3"
+                                    className="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-cyan"
+                                />
+                            </div>
                             <RangeRow
                                 label="定数"
                                 min={filters.levelMin}
@@ -439,6 +450,9 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
                                     </span>
                                 )}
                             </div>
+                            <p className="text-[11px] text-slate-600">
+                                精确定数，可带小数也可不带；多个用逗号分隔。「指定值」与区间同时填写时需两者都满足。
+                            </p>
                         </div>
 
                         {/* 必须存在的难度 */}

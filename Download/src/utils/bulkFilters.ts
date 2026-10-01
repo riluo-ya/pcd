@@ -25,8 +25,50 @@ export const DIFF_COLOR: Record<string, string> = {
 
 export type LevelScope = 'any' | 'highest' | 'specific';
 
+/**
+ * 解析「指定定数」输入框。
+ * 支持逗号 / 顿号 / 空格分隔，也可只填一个：
+ *   "17" → [17]      "15.3, 17.6" → [15.3, 17.6]
+ * 带不带小数都行，非法片段直接丢弃。
+ */
+export function parseLevelList(input: string): number[] {
+    if (!input || !input.trim()) return [];
+    return input
+        .split(/[,，、\s]+/)
+        .map(t => t.trim())
+        .filter(Boolean)
+        .map(Number)
+        .filter(n => Number.isFinite(n));
+}
+
+/**
+ * 定数是否等于目标值。
+ * 用容差而不是 ===：上游写 "17.6" 也有写 "17.60" 的，
+ * 直接比较浮点会因精度问题漏掉。0.05 远小于定数最小间隔 0.1，不会误判。
+ */
+export function levelEquals(v: number, target: number): boolean {
+    return Math.abs(v - target) < 0.05;
+}
+
+/** 按作用范围取出参与定数比较的数值池 */
+export function levelPool(
+    levels: { diff: string; level: number }[],
+    scope: LevelScope,
+    diffs: string[]
+): number[] | null {
+    if (levels.length === 0) return null;
+    if (scope === 'highest') return [Math.max(...levels.map(l => l.level))];
+    if (scope === 'specific') {
+        const picked = levels.filter(l => diffs.includes(l.diff)).map(l => l.level);
+        return picked.length > 0 ? picked : null;
+    }
+    return levels.map(l => l.level);
+}
+
 export interface Filters {
     keyword: string;
+    /** 指定定数，逗号分隔的精确值，如 "15.3, 17.6" */
+    levels: string;
     levelMin: string;
     levelMax: string;
     levelScope: LevelScope;
@@ -48,6 +90,7 @@ export interface Filters {
 
 export const emptyFilters: Filters = {
     keyword: '',
+    levels: '',
     levelMin: '',
     levelMax: '',
     levelScope: 'any',
@@ -123,26 +166,23 @@ export function applyBaseFilters(songs: Song[], f: Filters): Song[] {
             if (!f.requireDiffs.every(d => has.includes(d))) return false;
         }
 
-        // 定数区间
+        // 定数：区间与「指定定数」可同时用，两者都要满足
         const lo = num(f.levelMin);
         const hi = num(f.levelMax);
-        if (lo !== null || hi !== null) {
-            if (levels.length === 0) return false;
-            let pool: number[];
-            if (f.levelScope === 'highest') {
-                const max = Math.max(...levels.map(l => l.level));
-                pool = [max];
-            } else if (f.levelScope === 'specific') {
-                const picked = levels.filter(l => f.levelDiffs.includes(l.diff)).map(l => l.level);
-                if (picked.length === 0) return false;
-                pool = picked;
-            } else {
-                pool = levels.map(l => l.level);
+        const targets = parseLevelList(f.levels);
+        if (lo !== null || hi !== null || targets.length > 0) {
+            const pool = levelPool(levels, f.levelScope, f.levelDiffs);
+            if (pool === null) return false;
+            if (lo !== null || hi !== null) {
+                const hit = pool.some(v =>
+                    (lo === null || v >= lo) && (hi === null || v <= hi)
+                );
+                if (!hit) return false;
             }
-            const hit = pool.some(v =>
-                (lo === null || v >= lo) && (hi === null || v <= hi)
-            );
-            if (!hit) return false;
+            if (targets.length > 0) {
+                const hit = pool.some(v => targets.some(t => levelEquals(v, t)));
+                if (!hit) return false;
+            }
         }
 
         // 黑名单
@@ -171,6 +211,8 @@ export function applyStatsFilters(songs: Song[], f: Filters, stats: Map<string, 
 export interface QuickFilters {
     /** 必须存在的难度，如 ['AT']；空数组表示不限制 */
     requireDiffs: string[];
+    /** 指定定数，逗号分隔的精确值，如 "15.3, 17.6" */
+    levels: string;
     /** 定数下限 / 上限，空字符串表示不限 */
     levelMin: string;
     levelMax: string;
@@ -182,6 +224,7 @@ export interface QuickFilters {
 
 export const emptyQuickFilters: QuickFilters = {
     requireDiffs: [],
+    levels: '',
     levelMin: '',
     levelMax: '',
     charter: '',
@@ -193,6 +236,7 @@ export function countActiveQuickFilters(f: QuickFilters): number {
     let n = 0;
     if (f.requireDiffs.length > 0) n++;
     if (f.levelMin.trim() || f.levelMax.trim()) n++;
+    if (f.levels.trim()) n++;
     if (f.charter) n++;
     if (f.composer) n++;
     return n;
@@ -202,7 +246,8 @@ export function countActiveQuickFilters(f: QuickFilters): number {
 export function applyQuickFilters(songs: Song[], f: QuickFilters): Song[] {
     const lo = num(f.levelMin);
     const hi = num(f.levelMax);
-    const noLevelFilter = lo === null && hi === null;
+    const targets = parseLevelList(f.levels);
+    const noLevelFilter = lo === null && hi === null && targets.length === 0;
     const noDiffFilter = f.requireDiffs.length === 0;
 
     // 三项都没设，直接返回原数组，避免无谓遍历
@@ -215,11 +260,16 @@ export function applyQuickFilters(songs: Song[], f: QuickFilters): Song[] {
             if (!f.requireDiffs.every(d => has.includes(d))) return false;
         }
 
-        // 定数：任一难度落在区间内即可
+        // 定数：区间与「指定定数」都要满足，任一难度命中即可
         if (!noLevelFilter) {
             const levels = songLevels(song).map(l => l.level);
             if (levels.length === 0) return false;
-            if (!levels.some(v => (lo === null || v >= lo) && (hi === null || v <= hi))) return false;
+            if (lo !== null || hi !== null) {
+                if (!levels.some(v => (lo === null || v >= lo) && (hi === null || v <= hi))) return false;
+            }
+            if (targets.length > 0) {
+                if (!levels.some(v => targets.some(t => levelEquals(v, t)))) return false;
+            }
         }
 
         // 谱师：该曲任一难度的谱师命中即可（区分大小写完全匹配）
