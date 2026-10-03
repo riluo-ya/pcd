@@ -307,6 +307,16 @@
                 <input type="checkbox" id="splitOutput">
                 <span style="font-size:12px;color:#cbd5e1">分别处理所有勾选谱面，打包成一个压缩包</span>
             </label>
+            <div class="mo-row" style="margin-top:8px" id="blockAreaRow">
+                <label style="font-size:12px;color:#94a3b8">噪域</label>
+                <select id="blockAreaMode" style="flex:1;min-width:150px">
+                    <option value="keep">保留原样（不改动）</option>
+                    <option value="merge">整合时合并所有谱面并去重</option>
+                    <option value="main">整合时只保留主谱面</option>
+                    <option value="none">删除所有噪域</option>
+                </select>
+            </div>
+            <div class="mo-tip" id="blockAreaTip" style="font-size:11px;color:#94a3b8"></div>
         </div>
 
         <div id="emptyBox">
@@ -535,6 +545,8 @@
                 const dedupeLines = $('#dedupeLines');
                 const mergeTip = $('#mergeTip');
                 const splitOutput = $('#splitOutput');
+                const blockAreaMode = $('#blockAreaMode');
+                const blockAreaTip = $('#blockAreaTip');
                 const chartList = $('#chartList');
                 const batchPanel = $('#batchPanel');
                 const batchCount = $('#batchCount');
@@ -546,6 +558,52 @@
                 function resetZipState() { zipImportData = null; zipJsonPath = null; isZipImport = false; }
 
                 // 根据模式更新控件禁用状态
+                /** 统计噪域的构成：加算 / 减算数量与覆盖时间跨度 */
+                function blockAreaStats(data) {
+                    const list = getBlockAreas(data);
+                    if (list.length === 0) return null;
+                    let sub = 0, lo = Infinity, hi = -Infinity;
+                    list.forEach(a => {
+                        if (a.isSubtract) sub++;
+                        const t0 = Number(a.appearTime), t1 = Number(a.disappearTime);
+                        if (isFinite(t0) && t0 < lo) lo = t0;
+                        if (isFinite(t1) && t1 > hi) hi = t1;
+                    });
+                    return {
+                        total: list.length,
+                        sub: sub,
+                        add: list.length - sub,
+                        span: (isFinite(lo) && isFinite(hi)) ? (hi - lo) : 0,
+                    };
+                }
+
+                /** 下方实时说明：噪域那一行 */
+                function renderBlockAreaTip() {
+                    if (!blockAreaTip || !blockAreaMode) return;
+                    const total = charts.reduce((n, c) => n + countBlockAreas(c.data), 0);
+                    if (total === 0) {
+                        blockAreaTip.textContent = '当前谱面没有噪域（blockAreaList），此项无影响';
+                        return;
+                    }
+                    // 展示构成：减算（挖洞）与加算（遮挡）数量不同，视觉效果差别很大
+                    const st = charts.map(c => blockAreaStats(c.data)).filter(Boolean);
+                    const sub = st.reduce((n, x) => n + x.sub, 0);
+                    const add = st.reduce((n, x) => n + x.add, 0);
+                    const span = Math.max(...st.map(x => x.span), 0);
+                    const mmss = (sec) => {
+                        const m = Math.floor(sec / 60), r = Math.round(sec % 60);
+                        return m + ':' + String(r).padStart(2, '0');
+                    };
+                    const map = {
+                        keep: '原样保留，整合时随主谱面带过去',
+                        merge: '把所有谱面的噪域合并并去重，视觉最完整，但数量可能变多',
+                        main: '整合时只保留主谱面的噪域，其他难度的会被丢弃',
+                        none: '删除全部噪域，输出干净的谱面',
+                    };
+                    blockAreaTip.textContent =
+                        `共 ${total} 个（遮挡 ${add} · 挖洞 ${sub}）· 跨度约 ${mmss(span)} · ${map[blockAreaMode.value] || ''}`;
+                }
+
                 function updateModeControls() {
                     const randomActive = randomBtn.classList.contains('active');
                     const mergeActive = mergeBtn.classList.contains('active');
@@ -638,6 +696,101 @@
                     return n;
                 }
 
+                /** ===================== 噪域（blockArea）=====================
+                 * Phigros 新版本新增的 blockAreaList：按两个对角坐标定义一个矩形区域，
+                 * 在 enable~disable 期间遮挡/裁剪屏幕（isSubtract 表示减算，即挖洞）。
+                 * 工坊过去完全不认识它，整合时会随主谱面整体带过来但无法控制，
+                 * 这里补上读取、合并去重与删除的能力。
+                 *
+                 * 单个 blockArea 的真实字段（以实谱为准）：
+                 *   topRightPercentage / bottomLeftPercentage  对角坐标 {x,y}，取值不限于 0~1
+                 *   appearTime / enableTime / disableTime / disappearTime  音乐时间（秒）
+                 *   isSubtract  减算（挖洞）标记
+                 *   rotateEvents / moveEvents / scaleEvents   动画关键帧
+                 *
+                 * ⚠️ 官方文档写的是 rotateEventsList / moveEventsList / scaleEventsList，
+                 * 但实谱里没有 List 后缀。照文档写会取到 undefined。
+                 * 目前只做搬运/去重/删除，无需读事件；将来若要编辑动画，务必用无后缀的名字。
+                 *
+                 * ⚠️ 噪域需要 formatVersion >= 3。老版本谱面整合进噪域后必须升版本，
+                 * 否则 Phira 认不出 blockAreaList（见 ensureFormatVersion）。
+                 */
+
+                /** 取出噪域列表，没有就返回空数组 */
+                function getBlockAreas(data) {
+                    return (data && Array.isArray(data.blockAreaList)) ? data.blockAreaList : [];
+                }
+
+                function countBlockAreas(data) {
+                    return getBlockAreas(data).length;
+                }
+
+                /**
+                 * 噪域的唯一键，用于合并去重。
+                 * 位置 + 四个时间点 + 是否减算都一致才认为是同一个；
+                 * 事件数组不参与（内容多且浮点多，逐字节比对极易误判为不同）。
+                 */
+                function blockAreaKey(a) {
+                    const num = (v) => {
+                        const n = Number(v);
+                        return isFinite(n) ? n.toFixed(3) : '';
+                    };
+                    const pt = (p) => (p ? (num(p.x) + ':' + num(p.y)) : ':');
+                    return [
+                        pt(a.topRightPercentage),
+                        pt(a.bottomLeftPercentage),
+                        num(a.appearTime), num(a.enableTime),
+                        num(a.disableTime), num(a.disappearTime),
+                        a.isSubtract ? 'sub' : 'add',
+                    ].join('|');
+                }
+
+                /**
+                 * 噪域是 formatVersion 3 才有的结构。
+                 * 若主谱面是老版本（1/2）而整合时合并进了噪域，
+                 * 版本号还停留在旧值的话，Phira 会认不出 blockAreaList —— 这里补上升级。
+                 */
+                function ensureFormatVersion(data) {
+                    if (!data || typeof data !== 'object') return data;
+                    const has = Array.isArray(data.blockAreaList) && data.blockAreaList.length > 0;
+                    if (!has) return data;
+                    const v = Number(data.formatVersion);
+                    if (!isFinite(v) || v < 3) data.formatVersion = 3;
+                    return data;
+                }
+
+                /**
+                 * 合并多张谱面的噪域并按上面的键去重。
+                 * 参数 mode：
+                 *   'main'  —— 只保留主谱面的（默认，视觉与主谱面一致）
+                 *   'merge' —— 全部合进来去重（最完整，但数量可能翻倍）
+                 *   'none'  —— 全部删除（输出干净谱面）
+                 */
+                function mergeBlockAreas(list, mode) {
+                    if (mode === 'none') return [];
+                    if (!Array.isArray(list) || list.length === 0) return [];
+                    let mainIdx = list.findIndex(c => c.isMain);
+                    if (mainIdx < 0) mainIdx = 0;
+                    // keep 与 main 都只取主谱面：keep 是「什么都不做」，
+                    // main 是「其他难度的噪域丢弃」，落到输出上结果一致
+                    if (mode === 'main' || mode === 'keep') {
+                        return JSON.parse(JSON.stringify(getBlockAreas(list[mainIdx].data)));
+                    }
+                    const seen = new Set();
+                    const out = [];
+                    // 主谱面优先，保证它自己的噪域不会因为重复而丢失
+                    const order = [list[mainIdx]].concat(list.filter((_, i) => i !== mainIdx));
+                    order.forEach(c => {
+                        getBlockAreas(c.data).forEach(a => {
+                            const k = blockAreaKey(a);
+                            if (seen.has(k)) return;
+                            seen.add(k);
+                            out.push(JSON.parse(JSON.stringify(a)));
+                        });
+                    });
+                    return out;
+                }
+
                 function addChart(name, data, zip) {
                     if (!data || typeof data !== 'object') { showToast('❌', '格式错误', name + ' 内容为空'); return null; }
                     if (!Array.isArray(data.judgeLineList)) { showToast('❌', '格式错误', name + ' 缺少 judgeLineList'); return null; }
@@ -690,6 +843,7 @@
                     batchPanel.style.display = '';
                     renderChartList();
                     updateModeControls();
+                    renderBlockAreaTip();
                     computeStats();
                 }
 
@@ -727,7 +881,9 @@
 
                         const meta = document.createElement('div');
                         meta.className = 'ci-meta';
-                        meta.textContent = countNotes(c.data) + ' 音符 · ' + c.data.judgeLineList.length + ' 线';
+                        const baCount = countBlockAreas(c.data);
+                        meta.textContent = countNotes(c.data) + ' 音符 · ' + c.data.judgeLineList.length + ' 线'
+                            + (baCount > 0 ? (' · ' + baCount + ' 噪域') : '');
 
                         const mb = document.createElement('button');
                         mb.type = 'button';
@@ -1039,6 +1195,7 @@
                  * @returns 合并后的谱面数据（其余字段沿用主谱面）
                  */
                 function mergeCharts(list, opts) {
+                    const blockMode = (opts && opts.blockAreaMode) || 'main';
                     if (!Array.isArray(list) || list.length < 2) return null;
 
                     const mode = opts && opts.mode === 'random' ? 'random' : 'even';
@@ -1114,6 +1271,14 @@
                     // 6) 输出沿用主谱面的元信息
                     const out = JSON.parse(JSON.stringify(main.data));
                     out.judgeLineList = lines;
+                    // 噪域按选定方式处理；'keep' 时维持主谱面原本的（什么都不做）
+                    if (blockMode !== 'keep') {
+                        const areas = mergeBlockAreas(list, blockMode);
+                        if (areas.length > 0) out.blockAreaList = areas;
+                        else delete out.blockAreaList;
+                    }
+                    // 老版本主谱面 + 合并进来的噪域 → 升到 v3，否则 Phira 认不出
+                    ensureFormatVersion(out);
 
                     const perChart = {};
                     list.forEach(c => { perChart[c.label] = usedBy.get(c.id) || 0; });
@@ -1522,7 +1687,8 @@
                             const res = mergeCharts(sel, {
                                 mode: mergeModeSel.value,
                                 segments: parseInt(segCount.value, 10),
-                                dedupe: dedupeLines.checked
+                                dedupe: dedupeLines.checked,
+                                blockAreaMode: blockAreaMode ? blockAreaMode.value : 'main'
                             });
                             if (!res) {
                                 showToast('❌', '整合失败', '整合结果为空');
@@ -1535,6 +1701,11 @@
                         }
 
                         const processedData = processChartData(srcData, rules, shield, feats);
+                        // 「删除所有噪域」在非整合路径下单独生效
+                        if (blockAreaMode && blockAreaMode.value === 'none' && !feats.merge) {
+                            delete processedData.blockAreaList;
+                        }
+                        ensureFormatVersion(processedData);
                         const jsonStr = JSON.stringify(processedData);
 
                         // 分别处理模式：把每张勾选的谱面各自打包，再汇总成一个压缩包
@@ -1548,10 +1719,12 @@
                                 const used = new Set();
                                 for (let ti = 0; ti < targets.length; ti++) {
                                     const c = targets[ti];
-                                    const one = await buildOneOutput(
-                                        processChartData(c.data, rules, shield, feats),
-                                        c, rules, feats, null
-                                    );
+                                    const oneData = processChartData(c.data, rules, shield, feats);
+                                    if (blockAreaMode && blockAreaMode.value === 'none') {
+                                        delete oneData.blockAreaList;
+                                    }
+                                    ensureFormatVersion(oneData);
+                                    const one = await buildOneOutput(oneData, c, rules, feats, null);
                                     const base = c.songName || c.srcName || c.name;
                                     let fn = generateDownloadName(base, feats, rules, null, c.label) + one.ext;
                                     // 同名会互相覆盖，加序号兜底
@@ -1603,6 +1776,8 @@
                     finally { setTimeout(() => { showOverlay(false); processBtn.disabled = false; }, 800); }
                 });
 
+                if (blockAreaMode) blockAreaMode.addEventListener('change', renderBlockAreaTip);
+
                 resetBtn.addEventListener('click', resetAllOptions);
                 reportBtn.addEventListener('click', () => {
                     if (!chartData || !statsCache) { showToast('❌', '无数据', '请先加载谱面'); return; }
@@ -1615,6 +1790,7 @@
                         `  Format: ${chartData.formatVersion ?? 'Unknown'}`,
                         `  BPM: ${getBpmFromChart(chartData)}`,
                         `  JudgeLines: ${chartData.judgeLineList.length}`,
+                        `  BlockAreas: ${countBlockAreas(chartData)}`,
                         `  Beat Range: ${s.minBeat.toFixed(1)} ~ ${s.maxBeat.toFixed(1)}`,
                         '╠══════════════════════════════════════════╣',
                         '  Note Statistics',
