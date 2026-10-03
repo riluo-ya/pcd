@@ -139,7 +139,12 @@
         .field select option { background:var(--bg-2); color:var(--text); }
         .shield { margin-top:12px; padding:14px; border-radius:10px; display:flex; align-items:center; gap:12px; background:rgba(255,107,107,.06); border:1px solid rgba(255,107,107,.15); cursor:pointer; transition:.2s; user-select:none; }
         .shield:hover { background:rgba(255,107,107,.1); border-color:rgba(255,107,107,.25); }
-        .shield input { width:20px; height:20px; accent-color:var(--flick); flex-shrink:0; cursor:pointer; }
+        .shield input { width:20px; height:20px; flex-shrink:0; cursor:pointer; }
+        /* 屏蔽长条是警示项，勾选框用红色跟普通项区分（accent-color 对自绘无效） */
+        .shield input[type="checkbox"]:checked {
+            background:linear-gradient(135deg, var(--flick), #ffa8a8);
+            border-color:var(--flick); box-shadow:0 0 12px rgba(255,107,107,.35);
+        }
         .shield .t { font-weight:700; font-size:.9rem; color:var(--flick); }
         .shield .d { font-size:.8rem; color:var(--text-2); margin-top:2px; }
         .feat-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
@@ -151,6 +156,55 @@
         .feat-btn:hover { border-color:var(--border-hover); background:rgba(255,255,255,.03); transform:translateY(-1px); }
         .feat-btn.active { border-color:var(--accent); background:rgba(124,108,240,.1); box-shadow:0 0 20px rgba(124,108,240,.15); }
         .feat-btn .em { font-size:1.4rem; line-height:1; }
+
+        /* ===== 自绘下拉：替代原生 select =====
+           原生 select 在手机上会弹出系统控件，桌面端各浏览器样式也不一致，
+           跟这套深色界面拼在一起很违和。这里保留原生 select 作为数据源
+           （加 .cmb-src 隐藏），只替换外观 —— 读 .value、监听 change 的既有代码全部照常。 */
+        .cmb { position:relative; flex:1; min-width:120px; }
+        .cmb-btn { width:100%; min-height:38px; display:flex; align-items:center; justify-content:space-between; gap:8px;
+            background:var(--bg-2); color:var(--text); border:1px solid var(--border); border-radius:8px;
+            padding:8px 10px; font-size:.85rem; font-family:inherit; text-align:left; cursor:pointer; outline:none; transition:.2s; }
+        .cmb-btn:hover { border-color:var(--border-hover); background:var(--bg-3); }
+        .cmb.open .cmb-btn { border-color:var(--accent); box-shadow:0 0 0 3px rgba(124,108,240,.14); }
+        .cmb-label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .cmb-arrow { flex-shrink:0; font-size:.6rem; color:var(--text-2); transition:transform .2s; }
+        .cmb.open .cmb-arrow { transform:rotate(180deg); color:var(--accent-2); }
+        .cmb-list { position:absolute; top:calc(100% + 5px); left:0; right:0; z-index:80;
+            background:var(--bg-1); border:1px solid var(--border); border-radius:10px; padding:5px;
+            box-shadow:var(--shadow); max-height:240px; overflow-y:auto; display:none; }
+        .cmb.open .cmb-list { display:block; animation:cmbIn .16s ease; }
+        @keyframes cmbIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:none; } }
+        .cmb-opt { display:flex; align-items:center; justify-content:space-between; gap:8px;
+            padding:9px 10px; border-radius:7px; font-size:.85rem; color:var(--text); cursor:pointer; }
+        .cmb-opt:hover, .cmb-opt.on { background:var(--bg-3); }
+        .cmb-opt.sel { color:var(--accent-2); background:rgba(124,108,240,.12); font-weight:600; }
+        .cmb-opt.dis { opacity:.38; cursor:not-allowed; }
+        .cmb-opt.dis:hover { background:transparent; }
+        .cmb-check { font-size:.75rem; flex-shrink:0; opacity:0; }
+        .cmb-opt.sel .cmb-check { opacity:1; }
+        /* 原生 select 留在 DOM 里供取值，视觉上隐藏 */
+        select.cmb-src { position:absolute; width:1px; height:1px; padding:0; border:0; opacity:0; pointer-events:none; }
+        .cmb-list::-webkit-scrollbar { width:6px; }
+        .cmb-list::-webkit-scrollbar-thumb { background:var(--border-hover); border-radius:3px; }
+        .cmb-list::-webkit-scrollbar-track { background:transparent; }
+
+        /* ===== 统计卡片里的噪域概览 ===== */
+        .block-stat { margin-top:14px; padding:12px 14px; border-radius:12px;
+            background:var(--bg-0); border:1px solid var(--border); }
+        .bs-head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:9px; }
+        .bs-title { font-size:.78rem; font-weight:700; color:var(--text-2); letter-spacing:.06em; text-transform:uppercase; }
+        .bs-total { font-size:1.3rem; font-weight:800; color:var(--accent-2); line-height:1; }
+        .bs-bar { display:flex; height:8px; border-radius:4px; overflow:hidden; background:var(--bg-2); gap:1px; }
+        .bs-fill { height:100%; transition:width .5s cubic-bezier(.4,0,.2,1); }
+        .bs-fill.add { background:var(--accent-2); }
+        .bs-fill.sub { background:var(--accent); }
+        .bs-legend { display:flex; flex-wrap:wrap; gap:14px; margin-top:9px; font-size:.75rem; color:var(--text-2); }
+        .bs-legend > span { display:flex; align-items:center; gap:5px; }
+        .bs-legend i { width:9px; height:9px; border-radius:2px; flex-shrink:0; }
+        .bs-legend b { color:var(--text); font-weight:700; }
+        .bs-empty { font-size:.78rem; color:var(--text-2); display:flex; align-items:center; gap:7px; }
+        .bs-empty::before { content:''; width:9px; height:9px; border-radius:2px; background:var(--bg-2); border:1px solid var(--border); flex-shrink:0; }
         .actions { display:flex; gap:12px; flex-wrap:wrap; margin-top:4px; }
         .btn { flex:1; min-width:160px; padding:14px 20px; border-radius:12px; border:none; font-size:.95rem; font-weight:700; cursor:pointer; transition:.25s; display:inline-flex; align-items:center; justify-content:center; gap:8px; user-select:none; }
         .btn-prim { background:linear-gradient(135deg, #7c6cf0, #a78bfa); color:#fff; box-shadow:0 10px 30px rgba(124,108,240,.35); }
@@ -223,7 +277,7 @@
             transition: border-color .18s, background .18s;
         }
         .chart-item.is-main { border-color: var(--accent); background: rgba(34,211,238,.08); }
-        .chart-item .ci-chk { width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--accent); cursor: pointer; margin: 0; }
+        .chart-item .ci-chk { width: 18px; height: 18px; flex-shrink: 0; cursor: pointer; margin: 0; }
         .chart-item .ci-label {
             width: 74px; flex-shrink: 0; padding: 6px 8px; font-size: 13px; font-weight: 700;
             text-align: center; border-radius: 7px; border: 1px solid rgba(255,255,255,.16);
@@ -240,17 +294,44 @@
         .chart-item.is-main .ci-main-btn { background: var(--accent); color: #062b32; border-color: var(--accent); font-weight: 700; cursor: default; }
         .chart-item .ci-del { flex-shrink: 0; width: 28px; height: 28px; padding: 0; border-radius: 7px; border: none; background: transparent; color: #94a3b8; font-size: 15px; cursor: pointer; line-height: 1; }
         .chart-item .ci-del:hover { color: #f87171; background: rgba(248,113,113,.14); }
-        .merge-opts { margin-top: 12px; padding-top: 12px; border-top: 1px dashed rgba(255,255,255,.14); }
-        .merge-opts .mo-row { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; flex-wrap: wrap; }
-        .merge-opts .mo-row > label { font-size: 12px; color: #94a3b8; flex-shrink: 0; }
-        .merge-opts select, .merge-opts input[type="number"] {
+        /* 整合 / 批量面板的通用行、提示与输入框。
+           原先这些样式挂在 .merge-opts 前缀下，批量面板里用同样的类名却拿不到样式，
+           只能靠内联 style 硬凑，色值也写成另一套（黑底白字 + 高亮边框），
+           跟主界面的 --bg-2 / --border / --text 不一致 —— 这里提成通用类并统一走变量。 */
+        .merge-opts { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
+        .mo-row { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; flex-wrap: wrap; }
+        .mo-row > label { font-size: 12px; color: var(--text-2); flex-shrink: 0; }
+        .mo-tip { font-size: 11px; color: var(--text-2); line-height: 1.55; margin-top: 6px; }
+        .mo-field {
             padding: 7px 10px; font-size: 13px; border-radius: 7px;
-            border: 1px solid rgba(255,255,255,.16); background: rgba(0,0,0,.25);
-            color: #fff; font-family: inherit; outline: none;
+            border: 1px solid var(--border); background: var(--bg-2);
+            color: var(--text); font-family: inherit; outline: none; transition: .2s;
         }
-        .merge-opts select { flex: 1; min-width: 130px; }
-        .merge-opts input[type="number"] { width: 84px; }
-        .merge-opts .mo-tip { font-size: 11px; color: #94a3b8; line-height: 1.55; }
+        .mo-field:hover { border-color: var(--border-hover); }
+        .mo-field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,108,240,.14); }
+        .mo-row input[type="number"].mo-field { width: 84px; }
+        /* 整行的勾选框：原生 checkbox 在深色底上是白底方块，很跳，统一自绘 */
+        .mo-row.mo-check { cursor: pointer; }
+        .mo-row.mo-check > span { font-size: 12px; color: var(--text); }
+        input[type="checkbox"] {
+            appearance: none; -webkit-appearance: none; -moz-appearance: none;
+            width: 18px; height: 18px; flex-shrink: 0; margin: 0; cursor: pointer;
+            background: var(--bg-2); border: 1px solid var(--border); border-radius: 5px;
+            position: relative; outline: none; transition: .18s;
+        }
+        input[type="checkbox"]:hover { border-color: var(--border-hover); }
+        input[type="checkbox"]:checked {
+            background: linear-gradient(135deg, var(--accent), var(--accent-2));
+            border-color: var(--accent); box-shadow: 0 0 12px rgba(124,108,240,.35);
+        }
+        input[type="checkbox"]:checked::after {
+            content: ''; position: absolute; left: 5px; top: 1px;
+            width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
+        input[type="checkbox"]:focus-visible { box-shadow: 0 0 0 3px rgba(124,108,240,.2); }
+        /* 列表里的勾选框沿用同一套自绘外观（原先只设了 accent-color，未选中时仍是白底） */
+        .chart-item .ci-chk { width: 18px; height: 18px; flex-shrink: 0; cursor: pointer; margin: 0; }
         @media (max-width: 600px) {
             .chart-item { padding: 9px 10px; gap: 8px; }
             .chart-item .ci-name { flex: 1 1 100%; order: 2; }
@@ -300,23 +381,23 @@
                 <button type="button" class="bbtn danger" id="clearAllBtn">清空</button>
             </div>
             <div class="chart-list" id="chartList"></div>
-            <div class="mo-tip" style="margin-top:8px;font-size:11px;color:#94a3b8">
+            <div class="mo-tip">
                 ☑ 勾选 = 参与整合　·　点「设为主谱面」指定基准（决定 BPM、背景、判定线来源）
             </div>
-            <label class="mo-row" style="margin-top:8px;cursor:pointer" title="不整合时，把每张勾选的谱面各自处理并打包成一个压缩包">
+            <label class="mo-row mo-check" title="不整合时，把每张勾选的谱面各自处理并打包成一个压缩包">
                 <input type="checkbox" id="splitOutput">
-                <span style="font-size:12px;color:#cbd5e1">分别处理所有勾选谱面，打包成一个压缩包</span>
+                <span>分别处理所有勾选谱面，打包成一个压缩包</span>
             </label>
-            <div class="mo-row" style="margin-top:8px" id="blockAreaRow">
-                <label style="font-size:12px;color:#94a3b8">噪域</label>
-                <select id="blockAreaMode" style="flex:1;min-width:150px">
+            <div class="mo-row" id="blockAreaRow">
+                <label>噪域</label>
+                <select id="blockAreaMode">
                     <option value="keep">保留原样（不改动）</option>
                     <option value="merge">整合时合并所有谱面并去重</option>
                     <option value="main">整合时只保留主谱面</option>
                     <option value="none">删除所有噪域</option>
                 </select>
             </div>
-            <div class="mo-tip" id="blockAreaTip" style="font-size:11px;color:#94a3b8"></div>
+            <div class="mo-tip" id="blockAreaTip"></div>
         </div>
 
         <div id="emptyBox">
@@ -336,6 +417,24 @@
                         <div class="stat-cell hold"><div class="stat-num" id="sHold">0</div><div class="stat-label">Hold 长条</div><div class="stat-pct" id="pHold">0%</div></div>
                     </div>
                     <div class="total-pill"><div class="n" id="sTotal">0</div><div class="l">总物量</div></div>
+                    <div class="block-stat" id="blockStat">
+                        <div class="bs-head">
+                            <span class="bs-title">噪域 BlockArea</span>
+                            <span class="bs-total" id="bsTotal">0</span>
+                        </div>
+                        <div id="bsBody" style="display:none">
+                            <div class="bs-bar">
+                                <div class="bs-fill add" id="bsAdd" style="width:0%"></div>
+                                <div class="bs-fill sub" id="bsSubBar" style="width:0%"></div>
+                            </div>
+                            <div class="bs-legend">
+                                <span><i style="background:var(--accent-2)"></i>遮挡 <b id="bsAddN">0</b></span>
+                                <span><i style="background:var(--accent)"></i>挖洞 <b id="bsSubN">0</b></span>
+                                <span>跨度 <b id="bsSpan">0:00</b></span>
+                            </div>
+                        </div>
+                        <div class="bs-empty" id="bsEmpty">当前谱面没有噪域</div>
+                    </div>
                     <div class="dist-track" id="distTrack">
                         <div class="dist-fill" id="dTap" style="width:0%;background:var(--tap)"></div>
                         <div class="dist-fill" id="dDrag" style="width:0%;background:var(--drag)"></div>
@@ -391,7 +490,7 @@
                             </div>
                             <div class="mo-row">
                                 <label>分段数</label>
-                                <input type="number" id="segCount" value="16" min="2" max="512" step="1">
+                                <input type="number" id="segCount" class="mo-field" value="16" min="2" max="512" step="1">
                                 <span class="mo-tip">把全曲按时间切成 N 段，每段取一个难度</span>
                             </div>
                             <div class="mo-row">
@@ -590,10 +689,6 @@
                     const sub = st.reduce((n, x) => n + x.sub, 0);
                     const add = st.reduce((n, x) => n + x.add, 0);
                     const span = Math.max(...st.map(x => x.span), 0);
-                    const mmss = (sec) => {
-                        const m = Math.floor(sec / 60), r = Math.round(sec % 60);
-                        return m + ':' + String(r).padStart(2, '0');
-                    };
                     const map = {
                         keep: '原样保留，整合时随主谱面带过去',
                         merge: '把所有谱面的噪域合并并去重，视觉最完整，但数量可能变多',
@@ -601,7 +696,178 @@
                         none: '删除全部噪域，输出干净的谱面',
                     };
                     blockAreaTip.textContent =
-                        `共 ${total} 个（遮挡 ${add} · 挖洞 ${sub}）· 跨度约 ${mmss(span)} · ${map[blockAreaMode.value] || ''}`;
+                        `共 ${total} 个（遮挡 ${add} · 挖洞 ${sub}）· 跨度约 ${fmtSpan(span)} · ${map[blockAreaMode.value] || ''}`;
+                }
+
+                /** 秒 → m:ss */
+                function fmtSpan(sec) {
+                    const t = Math.max(0, Math.round(Number(sec) || 0));
+                    return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+                }
+
+                /** 统计卡片里的噪域概览：数量、遮挡/挖洞构成、覆盖跨度 */
+                function updateBlockStat() {
+                    const body = $('#bsBody'), empty = $('#bsEmpty');
+                    if (!body || !empty) return;
+                    const st = blockAreaStats(chartData);
+                    if (!st || st.total === 0) {
+                        body.style.display = 'none';
+                        empty.style.display = '';
+                        const t = $('#bsTotal'); if (t) t.textContent = '0';
+                        return;
+                    }
+                    body.style.display = '';
+                    empty.style.display = 'none';
+                    animateInt($('#bsTotal'), st.total);
+                    const a = $('#bsAddN'), b = $('#bsSubN'), sp = $('#bsSpan');
+                    if (a) a.textContent = st.add;
+                    if (b) b.textContent = st.sub;
+                    if (sp) sp.textContent = fmtSpan(st.span);
+                    const pa = $('#bsAdd'), pb = $('#bsSubBar');
+                    if (pa) pa.style.width = (st.total ? (st.add / st.total) * 100 : 0) + '%';
+                    if (pb) pb.style.width = (st.total ? (st.sub / st.total) * 100 : 0) + '%';
+                }
+
+                /** ================= 自绘下拉（替代原生 select）=================
+                 * 原生 select 在手机端会弹出系统控件，桌面端各浏览器渲染差异也很大，
+                 * 放在深色界面里很跳。这里保留原生 select 作为数据源（加 .cmb-src 隐藏），
+                 * 只替换外观：读 .value、监听 change 的既有代码一行都不用改。
+                 */
+
+                /** 同时只展开一个下拉 */
+                function closeCombos(exceptWrap) {
+                    document.querySelectorAll('.cmb.open').forEach(el => {
+                        if (el !== exceptWrap) el.classList.remove('open');
+                    });
+                }
+
+                function initCombobox(sel) {
+                    if (!sel || sel.classList.contains('cmb-src')) return;
+                    sel.classList.add('cmb-src');
+
+                    const wrap = document.createElement('div');
+                    wrap.className = 'cmb';
+
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'cmb-btn';
+                    btn.setAttribute('aria-haspopup', 'listbox');
+                    const label = document.createElement('span');
+                    label.className = 'cmb-label';
+                    const arrow = document.createElement('span');
+                    arrow.className = 'cmb-arrow';
+                    arrow.textContent = '\u25BC';
+                    btn.append(label, arrow);
+
+                    const list = document.createElement('div');
+                    list.className = 'cmb-list';
+                    list.setAttribute('role', 'listbox');
+
+                    wrap.append(btn, list);
+                    sel.parentNode.insertBefore(wrap, sel);
+
+                    const items = [];
+                    Array.from(sel.options).forEach((o, i) => {
+                        const el = document.createElement('div');
+                        el.className = 'cmb-opt';
+                        el.setAttribute('role', 'option');
+                        const t = document.createElement('span');
+                        t.textContent = o.textContent;
+                        const ck = document.createElement('span');
+                        ck.className = 'cmb-check';
+                        ck.textContent = '\u2713';
+                        el.append(t, ck);
+                        el.addEventListener('click', () => {
+                            // 被禁用的选项不可选，保持原生 select 的约束
+                            if (sel.options[i] && sel.options[i].disabled) return;
+                            sel.selectedIndex = i;
+                            // 触发 change，让页面原有的监听器照常工作
+                            sel.dispatchEvent(new Event('change', { bubbles: true }));
+                            // 联动改动（如规则行改了一个，另一个的可选项会变）也要反映到界面
+                            syncCombos();
+                            closeCombos(null);
+                        });
+                        list.appendChild(el);
+                        items.push(el);
+                    });
+
+                    const syncLabel = () => {
+                        // 直接读 options[selectedIndex]：selectedOptions 在部分环境下
+                        // 不会随 selectedIndex 立即同步，用它取会拿到上一次的旧项
+                        const idx = sel.selectedIndex;
+                        const o = (idx >= 0 && idx < sel.options.length) ? sel.options[idx] : null;
+                        label.textContent = o ? o.textContent : '';
+                        items.forEach((el, i) => {
+                            const opt = sel.options[i];
+                            const on = i === idx;
+                            const dis = !!(opt && opt.disabled);
+                            el.classList.toggle('sel', on);
+                            el.classList.toggle('dis', dis);
+                            el.setAttribute('aria-selected', on ? 'true' : 'false');
+                            el.setAttribute('aria-disabled', dis ? 'true' : 'false');
+                        });
+                    };
+                    // 挂到 select 上：外部改了 .value 后可手动同步显示，不必伪造 change 事件
+                    sel.__cmbSync = syncLabel;
+
+                    let hi = -1;
+                    const highlight = (n) => {
+                        if (!items.length) return;
+                        hi = (n + items.length) % items.length;
+                        items.forEach((el, i) => el.classList.toggle('on', i === hi));
+                        if (items[hi].scrollIntoView) items[hi].scrollIntoView({ block: 'nearest' });
+                    };
+
+                    const close = () => { wrap.classList.remove('open'); hi = -1; };
+                    const open = () => {
+                        closeCombos(wrap);
+                        wrap.classList.add('open');
+                        highlight(sel.selectedIndex >= 0 ? sel.selectedIndex : 0);
+                    };
+
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        wrap.classList.contains('open') ? close() : open();
+                    });
+
+                    btn.addEventListener('keydown', (e) => {
+                        const opened = wrap.classList.contains('open');
+                        if (!opened) {
+                            if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault(); open();
+                            }
+                            return;
+                        }
+                        if (e.key === 'ArrowDown') { e.preventDefault(); highlight(hi + 1); }
+                        else if (e.key === 'ArrowUp') { e.preventDefault(); highlight(hi - 1); }
+                        else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (items[hi]) items[hi].click(); }
+                        else if (e.key === 'Escape') { e.preventDefault(); close(); btn.focus(); }
+                        else if (e.key === 'Tab') close();
+                    });
+
+                    // 代码直接改 select.value 时（如重置），把显示同步回来
+                    sel.addEventListener('change', syncLabel);
+                    syncLabel();
+                    return wrap;
+                }
+
+                /**
+                 * 把所有自绘下拉的显示同步到其 select 的当前值。
+                 * 直接调 syncLabel 而不是派发 change —— 后者会连带触发页面原有的
+                 * 监听器（重置选项时并不希望它们跑一遍）。
+                 */
+                function syncCombos() {
+                    document.querySelectorAll('select.cmb-src').forEach(sel => {
+                        if (typeof sel.__cmbSync === 'function') sel.__cmbSync();
+                    });
+                }
+
+                /** 把容器内所有未处理的原生 select 换成自绘下拉 */
+                function initComboboxes(root) {
+                    const scope = root || document;
+                    scope.querySelectorAll('select').forEach(el => {
+                        if (!el.classList.contains('cmb-src')) initCombobox(el);
+                    });
                 }
 
                 function updateModeControls() {
@@ -645,6 +911,8 @@
                     mergeBtn.classList.remove('active');
                     shieldHold.checked = false;
                     randomShieldHold.checked = false;
+                    // 直接改 .value 不会触发 change，手动把自绘下拉的显示同步回来
+                    syncCombos();
                     updateModeControls(); // 恢复启用状态
                 }
 
@@ -1332,6 +1600,7 @@
                     $('#dTap').style.width = pctRaw(c[1],total)+'%'; $('#dDrag').style.width = pctRaw(c[2],total)+'%';
                     $('#dFlick').style.width = pctRaw(c[4],total)+'%'; $('#dHold').style.width = pctRaw(c[3],total)+'%';
                     requestAnimationFrame(()=>drawTimeline(notes));
+                    updateBlockStat();
                 }
 
                 function pct(v,t){ return t?((v/t)*100).toFixed(1)+'%':'0%'; }
@@ -1412,6 +1681,8 @@
                     row.appendChild(arrow);
                     row.appendChild(toSelect);
                     row.appendChild(delBtn);
+                    // 这两个 select 也要换成自绘下拉，否则和同页其它控件风格不一致
+                    initComboboxes(row);
 
                     // 新行根据当前模式设置禁用状态
                     const randomActive = randomBtn.classList.contains('active');
@@ -1834,6 +2105,10 @@
                 window.addEventListener('resize', () => {
                     if (chartData && statsCache) requestAnimationFrame(() => drawTimeline(getAllNotes(chartData)));
                 });
+                // 点页面空白处收起下拉
+                document.addEventListener('click', () => closeCombos(null));
+                // 把原生 select 换成自绘下拉（噪域模式 / 全局统一 / 整合模式）
+                initComboboxes();
             })();
         })();
 
