@@ -45,6 +45,20 @@
         "text": "Google 云端硬盘文件夹",
         "url": "https://drive.google.com/drive/folders/1LcJ2Ublu6TNNTqUph61ItzGwJTqG-IQu"
       }
+    },
+    {
+      "question": "“噪域”怎么加载？",
+      "answer": "目前（20261017）Phira还不支持噪域的渲染，如果你需要噪域效果的话可以试试下面的项目",
+      "links": [
+        {
+          "text": "Phira-Pro",
+          "url": "https://github.com/Phira-Pro/Phira-Pro"
+        }
+      ],
+      "link": {
+        "text": "Phira-Pro",
+        "url": "https://github.com/Phira-Pro/Phira-Pro"
+      }
     }
   ]
 }
