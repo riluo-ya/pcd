@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Song } from '../types';
-import { ghRaw } from '../utils/sources';
+import { getResourceUrl, ProxySource } from '../utils/resourceUrls';
 import { useSettings } from '../contexts/SettingsContext';
+import { DialogFrame, DialogHeader, DialogFooter, Button } from './ui/Dialog';
 import { ChartStats, fetchChartStats, primaryDifficulty } from '../utils/chartStats';
 import {
     CARD_THEMES,
@@ -38,11 +39,12 @@ function loadImage(url: string): Promise<HTMLImageElement | null> {
  * 直连域名稳定返回 CORS 头，能显著提高卡片拿到曲绘的成功率；
  * 两次都失败时返回 null，卡片会画占位图，不影响生成。
  */
-async function loadIllustration(songId: string): Promise<HTMLImageElement | null> {
-    const path = `7aGiven/Phigros_Resource/refs/heads/illustration/${songId}.png`;
-    const viaSource = await loadImage(ghRaw(path));
+async function loadIllustration(songId: string, proxySource: ProxySource): Promise<HTMLImageElement | null> {
+    // 先用当前加速源，失败再退回 GitHub 直连。
+    // 直连域名稳定返回 CORS 头，能显著提高卡片拿到曲绘的成功率。
+    const viaSource = await loadImage(getResourceUrl(proxySource, 'illustration', `${songId}.png`));
     if (viaSource) return viaSource;
-    return await loadImage(`https://raw.githubusercontent.com/${path}`);
+    return await loadImage(getResourceUrl('github', 'illustration', `${songId}.png`));
 }
 
 export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, onClose }) => {
@@ -96,7 +98,7 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
         setChartInfo({ bpm: null, judgeLines: null, duration: null });
 
 
-        loadIllustration(song.id).then(img => {
+        loadIllustration(song.id, settings.proxySource).then(img => {
             if (cancelled || !aliveRef.current) return;
             illuRef.current = img;
             setIlluReady(true); // 失败时为 null，卡片会画占位图
@@ -105,7 +107,8 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
         return () => {
             cancelled = true;
         };
-    }, [isOpen, song?.id]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, song?.id, settings.proxySource]);
 
     // 生成卡片
     const build = useCallback(() => {
@@ -146,7 +149,7 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
 
             await Promise.all(
                 targets.map(async d => {
-                    const s = await fetchChartStats(song.id, d);
+                    const s = await fetchChartStats(song.id, d, settings.proxySource);
                     if (!s) return;
                     result[d] = s.notes;
                     statsByDiff[d] = s;
@@ -170,22 +173,24 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
         return () => {
             cancelled = true;
         };
-    }, [needsChart, song?.id, isOpen]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [needsChart, song?.id, isOpen, settings.proxySource]);
 
     /** 下载按钮的反馈状态：null 为常态 */
     const [downloadState, setDownloadState] = useState<'saving' | 'done' | 'failed' | null>(null);
     const [copyState, setCopyState] = useState<'copying' | 'done' | 'failed' | null>(null);
 
-    const flash = (
-        set: (v: 'saving' | 'done' | 'failed' | null) => void,
-        v: 'saving' | 'done' | 'failed' | null
+    /** 下载/复制按钮的反馈态：停留一会儿再回到常态，避免状态一闪而过 */
+    const flash = <T extends string | null>(
+        set: React.Dispatch<React.SetStateAction<T>>,
+        v: T | null
     ) => {
-        set(v);
-        if (v === 'saving') return;
-        // 成功/失败提示停留一会儿再回到常态，避免状态一闪而过
-        setTimeout(() => {
-            if (aliveRef.current) set(null);
-        }, 1600);
+        set(v as T);
+        if (v !== 'saving') {
+            setTimeout(() => {
+                if (aliveRef.current) set(null as T);
+            }, 1600);
+        }
     };
 
     const handleDownload = async () => {
@@ -214,33 +219,14 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
     if (!isOpen || !song) return null;
 
     return (
-        <div
-            className="motion-backdrop fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="share-card-title"
-            onClick={onClose}
-        >
-            <div
-                className="motion-dialog relative w-full max-w-lg mx-auto overflow-hidden rounded-xl border border-slate-700 shadow-2xl flex flex-col max-h-[88vh] bg-slate-900/90 backdrop-blur-md"
-                onClick={e => e.stopPropagation()}
-            >
-                {/* 标题 */}
-                <div className="h-1 w-full bg-gradient-to-r from-brand-cyan/80 via-brand-cyan/25 to-transparent flex-shrink-0" />
-                <div className="px-5 pt-5 pb-3 border-b border-slate-700/50 flex-shrink-0">
-                    <h2 id="share-card-title" className="text-xl font-bold text-brand-cyan">
-                        谱面分享卡片
-                    </h2>
-                    <p className="text-slate-400 text-xs mt-1">
-                        生成一张可分享的图片，含曲绘、定数、谱师与二维码
-                    </p>
-                </div>
+        <DialogFrame onClose={onClose} labelledBy="share-card-title" className="w-full max-w-[520px] max-h-[min(88dvh,760px)]">
+            <DialogHeader id="share-card-title" eyebrow="Share" title="谱面分享卡片" onClose={onClose} />
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar px-5 py-4">
+                <div className="flex-1 min-h-0 overflow-y-auto thin-scroll px-5 py-4">
                     {/* 主题选择 */}
                     <div className="mb-3">
                         <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs text-slate-400">配色</span>
+                            <span className="font-mono text-[10px] font-medium tracking-[.14em] text-slate-500">配色</span>
                             <span className="text-[11px] text-slate-500">
                                 {CARD_THEMES.length} 套 · 当前：
                                 {CARD_THEMES.find(t => t.id === themeId)?.name}
@@ -269,7 +255,7 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
                     </div>
 
                     {/* 预览 */}
-                    <div className="relative rounded-xl overflow-hidden bg-slate-950 border border-slate-700/80 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/5">
+                    <div className="relative rounded-xl overflow-hidden bg-[#05070a] border border-white/[.08] shadow-[0_16px_40px_-12px_rgba(0,0,0,.7)]">
                         {dataUrl ? (
                             <img
                                 src={dataUrl}
@@ -294,36 +280,10 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
                     </p>
                 </div>
 
-                {/* 底部按钮 */}
-                <div className="px-5 py-4 border-t border-slate-700/50 flex flex-wrap gap-2 flex-shrink-0">
-                    <button
-                        type="button"
-                        onClick={handleDownload}
-                        disabled={!canvasRef.current || downloadState === 'saving'}
-                        aria-live="polite"
-                        className="flex-1 min-w-[120px] px-4 py-2.5 font-bold rounded-lg shadow-md transition-colors flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-400 to-brand-cyan hover:from-cyan-300 hover:to-cyan-400 text-slate-900 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                        {downloadState === 'saving' && (
-                            <span
-                                aria-hidden="true"
-                                className="inline-block w-3.5 h-3.5 rounded-full border-2 border-slate-900/30 border-t-slate-900 animate-spin"
-                            />
-                        )}
-                        {downloadState === 'saving'
-                            ? '正在下载…'
-                            : downloadState === 'done'
-                                ? '已保存到下载'
-                                : downloadState === 'failed'
-                                    ? '下载失败，重试'
-                                    : '下载图片'}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={handleCopy}
-                        disabled={!canvasRef.current || copyState === 'copying'}
-                        aria-live="polite"
-                        className="px-4 py-2.5 font-semibold rounded-lg shadow-md transition-colors bg-slate-700 hover:bg-slate-600 text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
+            <DialogFooter>
+                <span className="hidden sm:inline font-mono text-[10px] font-medium tracking-[.1em] text-slate-600">手机上长按图片即可保存</span>
+                <div className="flex items-center gap-2.5">
+                    <Button variant="outline" onClick={handleCopy} disabled={!canvasRef.current || copyState === 'copying'}>
                         {copyState === 'copying'
                             ? '正在复制…'
                             : copyState === 'done'
@@ -331,16 +291,18 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
                                 : copyState === 'failed'
                                     ? '复制失败'
                                     : '复制图片'}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="px-4 py-2.5 font-semibold rounded-lg shadow-md transition-colors bg-slate-700 hover:bg-slate-600 text-slate-200"
-                    >
-                        关闭
-                    </button>
+                    </Button>
+                    <Button variant="primary" size="md" onClick={handleDownload} disabled={!canvasRef.current || downloadState === 'saving'}>
+                        {downloadState === 'saving'
+                            ? '正在下载…'
+                            : downloadState === 'done'
+                                ? '已保存'
+                                : downloadState === 'failed'
+                                    ? '下载失败，重试'
+                                    : '下载图片'}
+                    </Button>
                 </div>
-            </div>
-        </div>
+            </DialogFooter>
+        </DialogFrame>
     );
 };

@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "lint": "eslint .",
     "build": "vite build",
-    "preview": "vite preview"
+    "deploy": "vite build && gh-pages -d dist",
+    "copy-static": "node copy-static.mjs",
+    "build:full": "vite build && node copy-static.mjs"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.2.0",

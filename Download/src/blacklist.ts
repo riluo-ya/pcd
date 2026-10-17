@@ -7,15 +7,10 @@ export interface BlacklistEntry {
 
 export const blacklist: BlacklistEntry[] = [
   {
-    songId: 'StardustRAY.kanonevsBlackY',
+    songId: 'placeholder',
     difficulty: 'IN',
-    reason: "该谱面会导致 Phira 在所有设备上按下「开始」后无响应。"
-  },
-  {
-    songId:'彩.MisoilePunch',
-    difficulty: 'IN',
-    reason: "该谱面会导致 Phira 在所有设备上按下「开始」后无响应。"
-  },
+    reason: "占位说明文本。"
+  }
 ];
 
 export const isBlacklisted = (songId: string, difficulty: string): BlacklistEntry | undefined => {

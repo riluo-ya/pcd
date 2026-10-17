@@ -20,6 +20,7 @@ PCD 是一个 Phigros 谱面下载站，附带答题验证、导航中心、网�
   - [批量下载](#批量下载)
   - [分享卡片](#分享卡片)
   - [设置项](#设置项)
+- [与上游项目的关系](#与上游项目的关系)
 - [上游数据来源](#上游数据来源)
 - [本地开发](#本地开发)
 - [部署](#部署)
@@ -60,50 +61,69 @@ pcd/
     ├── index.html
     ├── vite.config.ts
     ├── package.json
+    ├── copy-static.mjs         # 把根目录页面/数据复制进 dist
     └── src/
-        ├── App.tsx             # 主界面
-        ├── index.tsx           # 入口
+        ├── App.tsx             # 主界面（桌面双栏 / 移动端布局）
+        ├── index.tsx           # 入口（挂 AuthGate + 各 Provider）
         ├── index.css           # Tailwind + 动效样式
         ├── types.ts            # Song / FileInfo 类型
         ├── defaultSettings.ts  # 设置项与默认值
         ├── blacklist.ts        # 问题谱面名单
+        ├── extraCharts.ts      # 元数据未收录的额外谱面（如 SP）
+        ├── patchedCharts.ts    # 修复版谱面索引
         ├── song-aliases.ts     # 曲名别名（搜索用）
         ├── song-effects.ts     # 曲目特效映射
-        ├── aboutData.ts        # 关于页内容
+        ├── aboutData.ts        # 关于页内容与更新日志
         ├── faqData.ts          # 常见问题内容
         ├── contexts/
-        │   └── SettingsContext.tsx
+        │   ├── SettingsContext.tsx
+        │   └── ResourceErrorContext.tsx   # 资源错误集中上报与重试
+        ├── hooks/
+        │   ├── useIsMobile.ts
+        │   ├── useSongFiles.ts
+        │   └── useSongFilter.ts
         ├── components/
         │   ├── AuthGate.tsx              # 凭证校验与受限页
-        │   ├── SongSelector.tsx          # 选歌 + 筛选漏斗
-        │   ├── NameCombobox.tsx          # 谱师/曲师组合框
-        │   ├── DifficultySelector.tsx    # 难度选择
+        │   ├── SongSelector.tsx          # 曲库列表 + 搜索 / 排序 / 定数筛选
+        │   ├── SongWorkspace.tsx         # 谱面工作区（右侧详情）
+        │   ├── DifficultySelector.tsx    # 难度选择 + 体积预估
         │   ├── FileTable.tsx             # 资源清单
-        │   ├── BulkDownloadPanel.tsx     # 批量下载面板
+        │   ├── BulkDownloadPanel.tsx     # 批量下载面板（本站增强版）
         │   ├── ShareCardPopup.tsx        # 分享卡片弹窗
         │   ├── SettingsPopup.tsx         # 设置弹窗
         │   ├── SourcePopup.tsx           # 加速源切换
+        │   ├── DnsPopup.tsx              # 线路说明
         │   ├── AudioPlayerControl.tsx    # 音频预览
-        │   ├── AudioVisualizer.tsx       # 可视化
+        │   ├── AudioVisualizer.tsx       # 频谱可视化
         │   ├── SongEffectRenderer.tsx    # 曲目特效
+        │   ├── PatchedChartPopup.tsx     # 修复版谱面提示
+        │   ├── ResourceErrorPopup.tsx    # 资源错误提示
+        │   ├── InstructionPopup.tsx      # 首次导出须知
         │   ├── VersionCard.tsx / Header.tsx / Spinner.tsx
         │   ├── AboutPopup.tsx / FAQPopup.tsx
         │   ├── BlacklistWarningPopup.tsx / AssetDownloadWarningPopup.tsx
-        │   ├── ClearCacheButton.tsx
-        │   ├── Icons.tsx
-        │   └── effects/                  # 曲目特效：碎裂、碎片、烟花、
-        │                                 # 故障、叠层、径向光、文字扰动
+        │   ├── ClearCacheButton.tsx / Icons.tsx
+        │   ├── effects/                  # 曲目特效：碎裂、碎片、烟花、
+        │   │                             # 故障、叠层、径向光、文字扰动
+        │   ├── mobile/                   # 手机端专属布局
+        │   │   ├── MobileLayout.tsx / MobileLibrary.tsx
+        │   │   └── MobileSongView.tsx / BottomSheet.tsx
+        │   └── ui/Dialog.tsx             # 弹窗基础组件
         ├── utils/
-        │   ├── api.ts          # 曲库拉取
-        │   ├── auth.ts         # 凭证签发与校验
-        │   ├── sources.ts      # 加速源与 CDN 版本号
-        │   ├── export.ts       # 导出（调度 Web Worker）
-        │   ├── shareCard.ts    # 卡片绘制
-        │   ├── chartStats.ts   # 谱面解析（BPM/物量/判定线/时长）
-        │   ├── bulkFilters.ts  # 筛选逻辑
-        │   ├── qrcode.ts       # 二维码生成
-        │   ├── changelog.ts    # 更新记录
-        │   └── clearCache.ts   # 缓存清理
+        │   ├── api.ts           # 曲库 / 版本拉取
+        │   ├── auth.ts          # 凭证签发与校验
+        │   ├── resourceUrls.ts  # 资源地址与加速源
+        │   ├── githubAuth.ts    # 带令牌的资源请求
+        │   ├── export.ts        # 导出（调度 Web Worker）
+        │   ├── exportEstimate.ts# 导出体积预估
+        │   ├── chartConverter.ts# RPE 格式转换
+        │   ├── chartStats.ts    # 谱面解析（BPM/物量/判定线/时长）
+        │   ├── bulkFilters.ts   # 筛选逻辑
+        │   ├── difficulty.ts    # 难度顺序与配色
+        │   ├── qrcode.ts        # 二维码生成
+        │   ├── changelog.ts     # 更新记录
+        │   ├── clearCache.ts    # 缓存清理
+        │   └── shareCard.ts     # 卡片绘制
         └── worker/
             └── export.worker.ts # 实际下载与打包（后台线程）
 ```
@@ -394,6 +414,39 @@ sessionStorage，但**保留**登录凭证、已选加速源与 CDN 版本号，
 
 ---
 
+## 与上游项目的关系
+
+本站以上游项目 [swordalt/phigros-chart-downloader](https://github.com/swordalt/phigros-chart-downloader/)
+为基座，跟随其最新架构，同时保留本站自建功能。
+
+**跟随上游（与上游保持一致）**
+
+| 模块 | 说明 |
+|---|---|
+| 双栏布局 | 曲库列表 + 谱面工作区，取代旧的单页纵向布局 |
+| 手机端布局 | `components/mobile/` 一套移动端专属界面 |
+| Web Worker | 增加 RPE 格式转换、GitHub 令牌鉴权、失败清单 |
+| 资源错误上下文 | 请求失败集中上报，弹窗可一键换源重试 |
+| 修复版谱面 | 已知不可玩谱面给出修复版下载入口 |
+| 额外谱面 | 元数据未收录的谱面（如 SP）单独登记 |
+
+**本站保留（上游没有）**
+
+| 模块 | 说明 |
+|---|---|
+| 答题鉴权 | `AuthGate` + `utils/auth.ts`，凭证无效时整站拦截 |
+| 批量下载面板 | 增强版：多条件筛选、勾选打包、分批、失败重试 |
+| 分享卡片 | 生成曲目卡片图，可下载 / 复制 |
+| 歌曲特效 | 9 套曲目专属特效 |
+| 频谱可视化 | 随音频实时绘制 |
+| 多加速源 | 含 gh-proxy 等国内线路，可随时切换 |
+| 入口页面 | 答题页、导航中心、蓝奏云索引、谱面工坊 |
+
+> 升级方式：以上游源码为地基，把上表「本站保留」的部分逐个移植上去，
+> 而不是在旧代码上打补丁 —— 这样上游后续更新仍可继续合并。
+
+---
+
 ## 上游数据来源
 
 全部资源来自公开仓库 `7aGiven/Phigros_Resource`，按分支取用：
@@ -419,13 +472,15 @@ sessionStorage，但**保留**登录凭证、已选加速源与 CDN 版本号，
 ```bash
 cd Download
 npm install
-npm run build     # 输出到 Download/dist
+npm run build:full   # 编译，并把根目录页面/数据复制进 Download/dist
 cd dist
 npx serve .
 ```
 
-然后把根目录的 `*.html` 与 `*.data` 复制到 `Download/dist/` 下
-（部署流程里由 CI 完成这步），即可访问：
+`build:full` = `vite build` + `node copy-static.mjs`，
+会一并把 `quiz.html`、`home.html`、`philzy.html`、`pmth.html`、
+三份 `.data`、`CNAME` 与 `jpg/` 复制进 `Download/dist/`，
+产物与线上一致。访问地址：
 
 | 页面 | 地址 |
 |---|---|

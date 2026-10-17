@@ -1,117 +1,86 @@
-import React, { useState, useEffect } from 'react';
-import { SOURCES, getSourceId, setSourceId, bumpCacheEpoch } from '../utils/sources';
+import React from 'react';
+import { useSettings } from '../contexts/SettingsContext';
+import { PROXY_SOURCES } from '../utils/resourceUrls';
+import { bumpCacheEpoch } from '../utils/resourceUrls';
+import { DialogFrame, DialogHeader, DialogFooter, Button } from './ui/Dialog';
 
 interface SourcePopupProps {
     isOpen: boolean;
     onClose: () => void;
 }
 
-export const SourcePopup: React.FC<SourcePopupProps> = ({ isOpen, onClose }) => {
-    const [selected, setSelected] = useState<string>(getSourceId());
-    const [switching, setSwitching] = useState<string | null>(null);
+const PROXY_TAGS: Record<string, string> = {
+    github: '默认',
+    jsdelivr: 'CDN',
+    'jsdelivr-gcore': 'CDN',
+    'ghproxy-net': '代理',
+    'ghfast-top': '代理',
+    'gh-proxy-com': '代理',
+};
 
-    useEffect(() => {
-        if (isOpen) {
-            setSelected(getSourceId());
-            setSwitching(null);
-        }
-    }, [isOpen]);
+/**
+ * 加速源快速切换弹窗。
+ *
+ * 与「设置 → 网络」里的选项共用同一个 settings.proxySource，
+ * 切换后由 App 的数据加载副作用自动重新拉取，不需要刷新页面。
+ * 顺带 bump CDN 版本号，保证切过去立刻拿到的是最新数据而不是 CDN 旧缓存。
+ */
+export const SourcePopup: React.FC<SourcePopupProps> = ({ isOpen, onClose }) => {
+    const { settings, setSettings } = useSettings();
 
     if (!isOpen) return null;
 
-    const handleSwitch = (id: string) => {
-        if (id === selected) return;
-        setSwitching(id);
-        setSourceId(id);
-        // 换源等于换域名，目标 CDN 上可能缓存着旧数据，
-        // 顺带 bump 版本号，保证切过去拿到的就是最新内容。
+    const handleSwitch = (id: typeof settings.proxySource) => {
+        if (id === settings.proxySource) return;
         bumpCacheEpoch();
-        // 延迟触发刷新，让用户看到切换反馈
-        window.setTimeout(() => {
-            location.reload();
-        }, 350);
+        setSettings(prev => ({ ...prev, proxySource: id }));
     };
 
     return (
-        <div
-            className="motion-backdrop fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            aria-labelledby="source-title"
-            role="dialog"
-            aria-modal="true"
-            onClick={onClose}
-        >
-            <div
-                className="motion-dialog relative w-full max-w-md mx-auto overflow-hidden rounded-xl border border-slate-700 shadow-2xl p-6 text-left transform transition-all bg-slate-900/80 backdrop-blur-md"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <h2 id="source-title" className="text-2xl font-bold text-brand-cyan mb-2">
-                    加速源切换
-                </h2>
-                <p className="text-sm text-slate-400 leading-relaxed mb-5">
-                    歌曲数据、曲绘、音频等资源托管在 GitHub，国内直连较慢。切换加速源后可改善加载速度，切换后页面将自动刷新。
+        <DialogFrame onClose={onClose} labelledBy="source-title" className="w-full max-w-[520px] max-h-[min(80dvh,680px)]">
+            <DialogHeader id="source-title" eyebrow="Network" title="加速源切换" onClose={onClose} />
+
+            <div className="flex-1 min-h-0 overflow-y-auto thin-scroll px-5 sm:px-6 py-4">
+                <p className="text-[13px] leading-[1.6] text-slate-400 m-0 mb-4">
+                    歌曲数据、曲绘、音频等资源托管在 GitHub，国内直连较慢。切换加速源后立即生效，并会强制 CDN 回源取最新数据。
                 </p>
 
-                <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-2 custom-scrollbar">
-                    {SOURCES.map(source => {
-                        const isActive = selected === source.id;
-                        const isSwitching = switching === source.id;
-                        const isRecommended = source.tag.includes('推荐');
+                <div className="flex flex-col gap-2.5" role="radiogroup" aria-label="加速源">
+                    {PROXY_SOURCES.map(source => {
+                        const isActive = settings.proxySource === source.id;
                         return (
-                            <div
+                            <button
                                 key={source.id}
-                                className={`rounded-lg border p-4 transition-colors duration-200 ${
+                                type="button"
+                                role="radio"
+                                aria-checked={isActive}
+                                onClick={() => handleSwitch(source.id)}
+                                className={`text-left flex items-center gap-3.5 px-3.5 py-3 rounded-[10px] border transition-colors ${
                                     isActive
-                                        ? 'border-brand-cyan/70 bg-slate-800/60'
-                                        : 'border-slate-700 bg-slate-800/30 hover:border-slate-600'
+                                        ? 'border-[rgba(34,211,238,.5)] bg-[rgba(34,211,238,.06)]'
+                                        : 'border-white/[.07] bg-white/[.015] hover:border-white/[.18]'
                                 }`}
                             >
-                                <div className="flex items-center justify-between gap-3 mb-2">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="font-semibold text-slate-200">{source.name}</span>
-                                        <span
-                                            className={`text-xs px-2 py-0.5 rounded-full ${
-                                                isRecommended
-                                                    ? 'bg-brand-cyan/15 text-brand-cyan'
-                                                    : 'bg-slate-600/40 text-slate-300'
-                                            }`}
-                                        >
-                                            {source.tag}
-                                        </span>
-                                        {isActive && (
-                                            <span className="text-xs text-brand-cyan font-medium">使用中</span>
-                                        )}
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleSwitch(source.id)}
-                                        disabled={isActive || isSwitching}
-                                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors duration-200 ${
-                                            isActive
-                                                ? 'bg-slate-700 text-slate-400 cursor-default'
-                                                : isSwitching
-                                                    ? 'bg-brand-cyan text-slate-900'
-                                                    : 'bg-slate-600 hover:bg-slate-500 text-white'
-                                        }`}
-                                    >
-                                        {isSwitching ? '切换中…' : isActive ? '当前' : '切换'}
-                                    </button>
-                                </div>
-                                <p className="font-mono text-sm text-slate-300">{source.host}</p>
-                                <p className="text-xs text-slate-500 mt-1">{source.desc}</p>
-                            </div>
+                                <span className={`w-4 h-4 flex-none rounded-full border-[1.5px] flex items-center justify-center ${isActive ? 'border-[#22d3ee]' : 'border-slate-600'}`}>
+                                    <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-[#22d3ee]' : ''}`} />
+                                </span>
+                                <span className="flex-1 min-w-0 flex flex-col">
+                                    <span className="text-sm font-semibold text-slate-200">{source.label}</span>
+                                    <span className="text-xs text-slate-400">{source.description}</span>
+                                </span>
+                                <span className={`font-mono text-[10px] font-medium flex-none ${isActive ? 'text-[#22d3ee]' : 'text-slate-600'}`}>
+                                    {PROXY_TAGS[source.id]}
+                                </span>
+                            </button>
                         );
                     })}
                 </div>
-
-                <div className="mt-6 flex justify-end">
-                    <button
-                        onClick={onClose}
-                        className="px-6 py-2 font-bold rounded-lg shadow-md transition-colors duration-200 bg-slate-600 hover:bg-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-slate-500"
-                    >
-                        关闭
-                    </button>
-                </div>
             </div>
-        </div>
+
+            <DialogFooter>
+                <span className="hidden sm:inline font-mono text-[10px] font-medium tracking-[.1em] text-slate-600">切换后立即生效，无需刷新</span>
+                <Button variant="primary" size="md" onClick={onClose}>关闭</Button>
+            </DialogFooter>
+        </DialogFrame>
     );
 };

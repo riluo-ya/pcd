@@ -163,7 +163,7 @@ export function applyBaseFilters(songs: Song[], f: Filters): Song[] {
         // 必须存在的难度
         if (f.requireDiffs.length > 0) {
             const has = levels.map(l => l.diff);
-            if (!f.requireDiffs.every(d => has.includes(d))) return false;
+            if (!f.requireDiffs.every(d => (has as string[]).includes(d))) return false;
         }
 
         // 定数：区间与「指定定数」可同时用，两者都要满足
@@ -257,7 +257,7 @@ export function applyQuickFilters(songs: Song[], f: QuickFilters): Song[] {
         // 必须存在的难度
         if (!noDiffFilter) {
             const has = DIFFS.filter(d => levelOf(song, d) !== null);
-            if (!f.requireDiffs.every(d => has.includes(d))) return false;
+            if (!f.requireDiffs.every(d => (has as string[]).includes(d))) return false;
         }
 
         // 定数：区间与「指定定数」都要满足，任一难度命中即可

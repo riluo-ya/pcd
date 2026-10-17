@@ -910,7 +910,7 @@ export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
     const nameAvailH = Math.max(120, artBottom - nameTop - nameReserve);
 
     let nameSize = 62;
-    let nameLines: string[] = [];
+    let nameLines: string[] & { truncated?: boolean } = [];
     let lineH = nameSize * 1.24;
     for (; nameSize >= 20; nameSize -= 2) {
         ctx.font = `700 ${nameSize}px ${FONT_STACK}`;

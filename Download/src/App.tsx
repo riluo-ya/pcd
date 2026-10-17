@@ -1,30 +1,51 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from './components/Header';
-import { VersionCard } from './components/VersionCard';
 import { SongSelector } from './components/SongSelector';
-import { FileTable } from './components/FileTable';
-import { DifficultySelector } from './components/DifficultySelector';
+import { SongWorkspace, ExportState } from './components/SongWorkspace';
 import { Spinner } from './components/Spinner';
 import { BlacklistWarningPopup } from './components/BlacklistWarningPopup';
 import { isBlacklisted, BlacklistEntry } from './blacklist';
-import { SettingsPopup } from './components/SettingsPopup';
-import { SourcePopup } from './components/SourcePopup';
+import { PatchedChartPopup } from './components/PatchedChartPopup';
+import { getPatchedChart, PatchedChartEntry } from './patchedCharts';
+import FileSaver from 'file-saver';
+import { SettingsPopup, SettingsCategory } from './components/SettingsPopup';
 import { FAQPopup } from './components/FAQPopup';
 import { AboutPopup } from './components/AboutPopup';
-import { ShareCardPopup } from './components/ShareCardPopup';
+import { InstructionPopup } from './components/InstructionPopup';
+import { ResourceErrorPopup } from './components/ResourceErrorPopup';
+import { Button } from './components/ui/Dialog';
 import { useSettings } from './contexts/SettingsContext';
+import { resourceFetch } from './utils/githubAuth';
+import { useResourceError } from './contexts/ResourceErrorContext';
+import { Song, SortConfig } from './types';
+import { fetchVersion, fetchSongs, sendPatchedChartDownloadNotification } from './utils/api';
+import { registerSongAliasesConsoleHelper } from './utils/songAliasesExport';
+import { exportAllAssets, exportChart, exportBulkAssets } from './utils/export';
+import { getResourceUrl, hasPerDifficultyIllustrations, getDifficultyIllustrationUrl } from './utils/resourceUrls';
+import { useSongFiles, getChartDifficulty } from './hooks/useSongFiles';
+import { useIsMobile } from './hooks/useIsMobile';
+import { MobileLayout } from './components/mobile/MobileLayout';
+// —— 本站自定义功能 ——
 import { AudioVisualizer } from './components/AudioVisualizer';
 import { getSongEffect } from './song-effects';
 import { SongEffectRenderer } from './components/SongEffectRenderer';
-import { AudioPlayerControl } from './components/AudioPlayerControl';
-import { Song, FileInfo, SortConfig } from './types';
-import { fetchVersion, fetchSongs } from './utils/api';
-import { ghRaw } from './utils/sources';
-import { exportAllAssets, exportChart } from './utils/export';
+import { ShareCardPopup } from './components/ShareCardPopup';
+import { SourcePopup } from './components/SourcePopup';
+import { DnsPopup } from './components/DnsPopup';
 import { BulkDownloadPanel } from './components/BulkDownloadPanel';
+import type { FailedFile } from './worker/export.worker';
+
+const REPO_URL = 'https://github.com/swordalt/phigros-chart-downloader/';
+const INSTRUCTION_SHOWN_KEY = 'phigrosDownloader_instructionShown';
 
 const App: React.FC = () => {
     const { settings, setSettings } = useSettings();
+    const { reportResourceError } = useResourceError();
+    const isMobile = useIsMobile();
+
+    useEffect(() => {
+        document.documentElement.dataset.blur = settings.newUiBlur ? 'on' : 'off';
+    }, [settings.newUiBlur]);
     const [version, setVersion] = useState<string | null>(null);
     const [isLoadingVersion, setIsLoadingVersion] = useState<boolean>(true);
     const [errorVersion, setErrorVersion] = useState<string | null>(null);
@@ -34,92 +55,135 @@ const App: React.FC = () => {
     const [errorSongs, setErrorSongs] = useState<string | null>(null);
     const [selectedSong, setSelectedSong] = useState<Song | null>(null);
     const [sortConfig, setSortConfig] = useState<SortConfig>({ type: 'alphanumerical', direction: 'asc' });
-    
-    const [files, setFiles] = useState<FileInfo[]>([]);
-    const [availableDifficulties, setAvailableDifficulties] = useState<string[]>([]);
-    const [selectedDifficulty, setSelectedDifficulty] = useState<string | null>(null);
-    const [exportState, setExportState] = useState<{ type: 'phira' | 'chart' | null; progress: number }>({ type: null, progress: 0 });
+
+    // The difficulty the user last picked; carried over to the next song when it has that chart.
+    const [preferredDifficulty, setPreferredDifficulty] = useState<string>('IN');
+    const [exportState, setExportState] = useState<ExportState>({ type: null, progress: 0 });
     const [blacklistWarning, setBlacklistWarning] = useState<(BlacklistEntry & { exportType: 'phira' | 'chart' }) | null>(null);
+    const [patchedChartPrompt, setPatchedChartPrompt] = useState<PatchedChartEntry | null>(null);
+    const [showInstruction, setShowInstruction] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isFaqOpen, setIsFaqOpen] = useState(false);
     const [isAboutOpen, setIsAboutOpen] = useState(false);
     const [isSourceOpen, setIsSourceOpen] = useState(false);
+    const [isDnsOpen, setIsDnsOpen] = useState(false);
     const [isShareCardOpen, setIsShareCardOpen] = useState(false);
-    
+    const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>('export');
+    const openSettings = (category: SettingsCategory) => {
+        setSettingsCategory(category);
+        setIsSettingsOpen(true);
+    };
+
+    const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
+    const toastTimeoutRef = useRef<number | null>(null);
+    const showToast = useCallback((text: string) => {
+        if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+        setToast({ id: Date.now(), text });
+        toastTimeoutRef.current = window.setTimeout(() => setToast(null), 2600);
+    }, []);
+
+    const abortControllerRef = useRef<AbortController | null>(null);
 
     // Background and Audio management
     const [bgImage, setBgImage] = useState<string | null>(null);
     const [isBgLoaded, setIsBgLoaded] = useState<boolean>(false);
     const [activeAudio, setActiveAudio] = useState<HTMLAudioElement | null>(null);
 
-    const initialSongSelected = useRef<boolean>(false);
-    // Determine current song effect
-    const activeEffect = settings.useNewUi && settings.newUiSongSpecificEffects && selectedSong 
-        ? getSongEffect(selectedSong.name) 
+    // 当前曲目命中的歌曲特效（可在设置里关闭）
+    const activeEffect = settings.newUiSongSpecificEffects && selectedSong
+        ? getSongEffect(selectedSong.name)
         : null;
 
+    const initialSongSelected = useRef<boolean>(false);
+
+    const { files, isLoading: isLoadingFiles } = useSongFiles(selectedSong, settings.proxySource);
+    const availableDifficulties = React.useMemo(
+        () => files.map(getChartDifficulty).filter((diff): diff is string => diff !== null),
+        [files]
+    );
+    const selectedDifficulty = availableDifficulties.length === 0
+        ? null
+        : availableDifficulties.includes(preferredDifficulty)
+            ? preferredDifficulty
+            : availableDifficulties[availableDifficulties.length - 1];
+
     const sortedSongs = React.useMemo(() => {
-        let result = [...songs];
-        
+        const result = [...songs];
+
         if (sortConfig.type === 'alphanumerical') {
             result.sort((a, b) => a.name.localeCompare(b.name));
         }
         // If 'unsorted', we rely on the original order (which is essentially what songs is)
-        
+
         if (sortConfig.direction === 'desc') {
             result.reverse();
         }
-        
+
         return result;
     }, [songs, sortConfig]);
 
-    useEffect(() => {
-        const loadVersion = async () => {
-            setIsLoadingVersion(true);
-            setErrorVersion(null);
-            try {
-                const ver = await fetchVersion();
-                setVersion(ver);
-            } catch (err) {
-                setErrorVersion(err instanceof Error ? err.message : '发生未知错误。');
-                console.error(err);
-            } finally {
-                setIsLoadingVersion(false);
-            }
-        };
-        loadVersion();
-    }, []);
+    const loadVersion = useCallback(async () => {
+        setIsLoadingVersion(true);
+        setErrorVersion(null);
+        try {
+            const ver = await fetchVersion(settings.proxySource);
+            setVersion(ver);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : '发生未知错误。';
+            setErrorVersion(message);
+            console.error(err);
+            reportResourceError('版本号加载失败。', () => loadVersion(), message);
+        } finally {
+            setIsLoadingVersion(false);
+        }
+    }, [settings.proxySource, reportResourceError]);
+
+    const loadSongs = useCallback(async () => {
+        setIsLoadingSongs(true);
+        setErrorSongs(null);
+        try {
+            const fetchedSongs = await fetchSongs(settings.proxySource);
+            setSongs(fetchedSongs);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : '获取歌曲列表时发生错误。';
+            setErrorSongs(message);
+            console.error(err);
+            reportResourceError('歌曲列表加载失败。', () => loadSongs(), message);
+        } finally {
+            setIsLoadingSongs(false);
+        }
+    }, [settings.proxySource, reportResourceError]);
 
     useEffect(() => {
-        const loadSongs = async () => {
-            setIsLoadingSongs(true);
-            setErrorSongs(null);
-            try {
-                const fetchedSongs = await fetchSongs();
-                setSongs(fetchedSongs);
-            } catch (err) {
-                setErrorSongs(err instanceof Error ? err.message : '获取歌曲列表时发生错误。');
-                console.error(err);
-            } finally {
-                setIsLoadingSongs(false);
-            }
-        };
+        registerSongAliasesConsoleHelper(songs);
+    }, [songs]);
+
+    useEffect(() => {
+        loadVersion();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [settings.proxySource]);
+
+    useEffect(() => {
         loadSongs();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [settings.proxySource]);
+
+    useEffect(() => {
+        return () => {
+            if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+        };
     }, []);
 
     const handleSongSelect = useCallback((song: Song | null) => {
         setSelectedSong(song);
-        setSelectedDifficulty(null);
-        setAvailableDifficulties([]);
-        setFiles([]);
     }, []);
-    
+
     useEffect(() => {
         if (songs.length > 0 && !initialSongSelected.current) {
             initialSongSelected.current = true;
             const urlParams = new URLSearchParams(window.location.search);
             const songIdFromUrl = urlParams.get('song');
-            
+
             if (songIdFromUrl) {
                 const songToSelect = songs.find(s => s.id === songIdFromUrl);
                 if (songToSelect) {
@@ -129,68 +193,72 @@ const App: React.FC = () => {
         }
     }, [songs, handleSongSelect]);
 
-    // Enhanced New UI with preloading and audio state
+    // Illustration behind the workspace. Songs with per-difficulty art follow the selected difficulty.
+    const illustrationUrl = selectedSong
+        ? hasPerDifficultyIllustrations(selectedSong.id)
+            ? getDifficultyIllustrationUrl(settings.proxySource, selectedSong.id, selectedDifficulty && ['EZ', 'HD', 'IN', 'AT'].includes(selectedDifficulty) ? selectedDifficulty : 'AT')
+            : getResourceUrl(settings.proxySource, 'illustration', `${selectedSong.id}.png`)
+        : null;
+
     useEffect(() => {
-        if (!settings.useNewUi || !selectedSong || settings.bulkDownloadMode) {
-            setActiveAudio(prev => {
-                if (prev) prev.pause();
-                return null;
-            });
+        setIsBgLoaded(false);
+        if (!illustrationUrl) {
             setBgImage(null);
-            setIsBgLoaded(false);
             return;
         }
 
-        const songId = selectedSong.id;
-        const illustrationUrl = ghRaw(`7aGiven/Phigros_Resource/refs/heads/illustration/${songId}.png`);
-        
-        // Reset loaded state for smooth transition
-        setIsBgLoaded(false);
-        
-        // Preload image
+        let cancelled = false;
         const img = new Image();
         img.src = illustrationUrl;
         img.onload = () => {
+            if (cancelled) return;
             setBgImage(illustrationUrl);
             setIsBgLoaded(true);
         };
         img.onerror = () => {
+            if (cancelled) return;
             setBgImage(null);
             setIsBgLoaded(false);
         };
+        return () => {
+            cancelled = true;
+        };
+    }, [illustrationUrl]);
 
-        // Audio Setup - Only if preview is enabled
-        if (settings.newUiAudioPreview) {
-            const audioUrl = ghRaw(`7aGiven/Phigros_Resource/refs/heads/music/${songId}.ogg`);
-            const audio = new Audio();
-            // IMPORTANT: Must set crossOrigin to anonymous BEFORE loading to allow Web Audio API analysis
-            audio.crossOrigin = "anonymous"; 
-            audio.src = audioUrl;
-            audio.loop = settings.newUiLoopAudio;
-            audio.volume = settings.newUiAudioVolume;
-
+    // Audio preview
+    useEffect(() => {
+        if (!selectedSong || settings.bulkDownloadMode || !settings.newUiAudioPreview) {
             setActiveAudio(prev => {
                 if (prev) prev.pause();
-                return audio;
+                return null;
             });
+            return;
+        }
 
+        const audioUrl = getResourceUrl(settings.proxySource, 'music', `${selectedSong.id}.ogg`);
+        const audio = new Audio();
+        // IMPORTANT: Must set crossOrigin to anonymous BEFORE loading to allow Web Audio API analysis
+        audio.crossOrigin = "anonymous";
+        audio.src = audioUrl;
+        audio.loop = settings.newUiLoopAudio;
+        audio.volume = settings.newUiAudioVolume;
+
+        setActiveAudio(prev => {
+            if (prev) prev.pause();
+            return audio;
+        });
+
+        audio.preload = "auto";
+        if (settings.newUiAutoplayAudio) {
             const playPromise = audio.play();
             if (playPromise !== undefined) {
                 playPromise.catch(error => {
                     console.warn("Autoplay blocked or audio failed to load:", error);
                 });
             }
-        } else {
-            setActiveAudio(prev => {
-                if (prev) prev.pause();
-                return null;
-            });
         }
-
-        return () => {
-            // No cleanup needed for activeAudio here as setActiveAudio logic handles pause
-        };
-    }, [selectedSong, settings.useNewUi, settings.newUiAudioPreview, settings.bulkDownloadMode]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedSong, settings.newUiAudioPreview, settings.bulkDownloadMode, settings.proxySource]);
 
     // Update audio loop property immediately when setting changes
     useEffect(() => {
@@ -206,64 +274,52 @@ const App: React.FC = () => {
         }
     }, [activeAudio, settings.newUiAudioVolume]);
 
-    // Cleanup audio on unmount or song change via the effect above essentially
+    // Stop audio when the audio element is replaced or the app unmounts
     useEffect(() => {
-         return () => {
+        return () => {
             if (activeAudio) activeAudio.pause();
-         }
-    }, []);
-
-
-    const handleFilesFound = useCallback((foundFiles: FileInfo[]) => {
-        setFiles(foundFiles);
-        const chartDifficulties = foundFiles
-            .map(file => {
-                const match = file.type.match(/Chart \(([^)]+)\)/);
-                return match ? match[1] : null;
-            })
-            .filter((diff): diff is string => diff !== null);
-        setAvailableDifficulties(chartDifficulties);
-    }, []);
+        };
+    }, [activeAudio]);
 
     const executeAllAssetsExport = async () => {
         if (!selectedSong || files.length === 0 || exportState.type) return;
 
         setExportState({ type: 'phira', progress: 0 });
         try {
-            await exportAllAssets(files, selectedSong, settings, (progress) => {
+            const fileName = await exportAllAssets(files, selectedSong, settings, (progress) => {
                 setExportState(prev => ({ ...prev, progress }));
             });
+            showToast(`已导出全部资源 · ${fileName}`);
         } catch (error) {
             console.error("Failed to export all assets: ", error);
-            alert("发生错误。请查看控制台获取更多信息。");
+            reportResourceError(
+                '全部资源导出失败。',
+                () => executeAllAssetsExport(),
+                error instanceof Error ? error.message : undefined
+            );
         } finally {
             setExportState({ type: null, progress: 0 });
         }
     };
 
-    /**
-     * 导出谱面。
-     * 选了难度就只导那一个；没选难度则导出这首歌的全部难度，
-     * 每个难度一个 .pez / .zip，打包成一个压缩包。
-     */
-    const executeChartExport = async () => {
+    const executeChartExport = async (difficulty?: string | null) => {
         if (!selectedSong || exportState.type) return;
+        // difficulty 为 null / undefined 时导出这首歌的全部难度
+        const target = difficulty === undefined ? selectedDifficulty : difficulty;
 
         setExportState({ type: 'chart', progress: 0 });
         try {
-            await exportChart(
-                files,
-                selectedSong,
-                selectedDifficulty,          // null = 导出全部难度
-                settings,
-                (progress) => {
-                    setExportState(prev => ({ ...prev, progress }));
-                },
-                availableDifficulties.length > 0 ? availableDifficulties : undefined
-            );
+            const fileName = await exportChart(files, selectedSong, target, settings, (progress) => {
+                setExportState(prev => ({ ...prev, progress }));
+            }, target ? undefined : availableDifficulties);
+            showToast(`已导出 ${fileName}`);
         } catch (error) {
             console.error("Failed to export as chart: ", error);
-            alert("发生错误。请查看控制台获取更多信息。");
+            reportResourceError(
+                '谱面导出失败。',
+                () => executeChartExport(target),
+                error instanceof Error ? error.message : undefined
+            );
         } finally {
             setExportState({ type: null, progress: 0 });
         }
@@ -274,288 +330,335 @@ const App: React.FC = () => {
         executeAllAssetsExport();
     };
 
-    const handleExportChart = () => {
-        if (!selectedSong || exportState.type) return;
+    /** 把这首歌的全部难度各打一个包，再塞进一个压缩包 */
+    const handleExportAllDifficulties = () => {
+        if (!selectedSong || availableDifficulties.length === 0 || exportState.type) return;
+        void executeChartExport(null);
+    };
 
-        // 没选难度时不再拦人 —— 直接导出这首歌的全部难度
-        if (!selectedDifficulty) {
-            void executeChartExport();
+    // Patched chart → known-issue warning → export.
+    const proceedChartExport = () => {
+        if (!selectedSong || !selectedDifficulty) return;
+
+        const patched = getPatchedChart(selectedSong.id, selectedDifficulty);
+        if (patched) {
+            setPatchedChartPrompt(patched);
             return;
         }
 
+        startChartExport();
+    };
+
+    const handleExportChart = () => {
+        if (!selectedSong || !selectedDifficulty || exportState.type) return;
+
+        // The "Before you play" notice is shown once, before the first export.
+        if (!localStorage.getItem(INSTRUCTION_SHOWN_KEY)) {
+            setShowInstruction(true);
+            return;
+        }
+
+        proceedChartExport();
+    };
+
+    const handleInstructionConfirm = () => {
+        localStorage.setItem(INSTRUCTION_SHOWN_KEY, 'true');
+        setShowInstruction(false);
+        proceedChartExport();
+    };
+
+    const startChartExport = () => {
+        if (!selectedSong || !selectedDifficulty) return;
         const entry = isBlacklisted(selectedSong.id, selectedDifficulty);
         if (entry) {
             setBlacklistWarning({ ...entry, exportType: 'chart' });
         } else {
-            executeChartExport();
+            executeChartExport(selectedDifficulty);
         }
     };
 
+    const handlePatchedOriginal = () => {
+        setPatchedChartPrompt(null);
+        startChartExport();
+    };
+
+    const handlePatchedDownload = async () => {
+        const patched = patchedChartPrompt;
+        setPatchedChartPrompt(null);
+        if (!patched || !selectedSong || exportState.type) return;
+
+        setExportState({ type: 'chart', progress: 0 });
+        try {
+            const response = await resourceFetch(patched.url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const blob = await response.blob();
+            FileSaver.saveAs(blob, patched.fileName);
+            sendPatchedChartDownloadNotification(selectedSong.name, patched.difficulty);
+            showToast(`已导出 ${patched.fileName}`);
+        } catch (error) {
+            console.error("Failed to download patched chart: ", error);
+            reportResourceError(
+                '修复版谱面下载失败。',
+                () => handlePatchedDownload(),
+                error instanceof Error ? error.message : undefined
+            );
+        } finally {
+            setExportState({ type: null, progress: 0 });
+        }
+    };
+
+    // 简易批量导出：上游内置的全量导出，作为 BulkDownloadPanel 不可用时的兜底
+    const [bulkExportState, setBulkExportState] = useState<{
+        isExporting: boolean;
+        currentFile: string;
+        action: 'Downloading' | 'Zipping' | 'Waiting' | null;
+        songsLeft: number;
+        percent: number;
+    }>({ isExporting: false, currentFile: '', action: null, songsLeft: 0, percent: 0 });
+
+    const handleSimpleBulkExport = async () => {
+        if (bulkExportState.isExporting || songs.length === 0) return;
+
+        setBulkExportState({
+            isExporting: true,
+            currentFile: '正在开始…',
+            action: 'Downloading',
+            songsLeft: songs.length,
+            percent: 0
+        });
+        abortControllerRef.current = new AbortController();
+
+        try {
+            const failedFiles: FailedFile[] = await exportBulkAssets(
+                songs, 0, settings.proxySource,
+                (currentFile, action, songsLeft, percent) => {
+                    setBulkExportState(prev => ({ ...prev, currentFile, action, songsLeft, percent: percent || 0 }));
+                },
+                abortControllerRef.current.signal
+            );
+            showToast(failedFiles.length > 0
+                ? `导出完成，${failedFiles.length} 个文件失败`
+                : `全部资源已导出（${songs.length} 首）`);
+        } catch (error) {
+            if (error instanceof Error && error.name !== 'AbortError') {
+                console.error("Bulk export failed: ", error);
+                reportResourceError('批量导出过程中出错。', () => handleSimpleBulkExport(), error.message);
+            }
+        } finally {
+            setBulkExportState({ isExporting: false, currentFile: '', action: null, songsLeft: 0, percent: 0 });
+            abortControllerRef.current = null;
+        }
+    };
+
+    const cancelBulkExport = useCallback(() => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+    }, []);
+
+    // Cancel bulk export when exiting bulk download mode
+    useEffect(() => {
+        if (!settings.bulkDownloadMode) {
+            cancelBulkExport();
+        }
+    }, [settings.bulkDownloadMode, cancelBulkExport]);
 
     const handleBlacklistConfirm = () => {
         if (!blacklistWarning) return;
-        
+
         if (blacklistWarning.exportType === 'chart') {
-            executeChartExport();
+            executeChartExport(selectedDifficulty);
         }
         setBlacklistWarning(null);
     };
-    
+
     const handleBlacklistCancel = () => {
         setBlacklistWarning(null);
     };
 
-    const isExporting = exportState.type !== null;
+    const handleFileDownloaded = useCallback((fileName: string) => showToast(`已保存 ${fileName}`), [showToast]);
+
+    // 批量下载面板退出：直接关掉模式开关
+    const exitBulkMode = useCallback(() => {
+        setSettings(prev => ({ ...prev, bulkDownloadMode: false }));
+    }, [setSettings]);
+
+    /** 桌面端 / 移动端的批量面板内容 */
+    const renderBulkPanel = () => (
+        <BulkDownloadPanel
+            songs={sortedSongs}
+            isLoading={isLoadingSongs}
+            error={errorSongs}
+            onExit={exitBulkMode}
+        />
+    );
 
     return (
-        <div className="relative min-h-screen antialiased font-saira overflow-x-hidden text-slate-200">
-            {/* New UI Background Layer - Fixed Z-0 */}
-            <div 
-                className="fixed top-0 left-0 w-full h-[100lvh] z-0 pointer-events-none"
-                aria-hidden="true"
-            >
-                {/* Background Image */}
-                <div 
-                    className="absolute inset-0 transition-all duration-1000 ease-in-out"
-                    style={{
-                        backgroundImage: bgImage ? `url("${bgImage}")` : 'none',
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                        filter: 'blur(30px) brightness(0.5)',
-                        opacity: isBgLoaded ? 1 : 0,
-                        transform: isBgLoaded ? 'scale(1.05)' : 'scale(1.15)',
-                    }}
-                />
-                {/* Fallback/Base gradient used when image is not loaded or for slight darkening */}
-                <div className={`absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-900 to-gray-900 -z-10`} />
-            </div>
-
-            {/* Visualizer Layer - Fixed Z-5 (Between bg and content) */}
-            {settings.useNewUi && settings.newUiShowVisualizer && activeAudio && !settings.bulkDownloadMode && (
-                <div className="animate-fade-in">
-                    <AudioVisualizer 
-                        audio={activeAudio} 
-                        color={settings.newUiVisualizerColor}
-                        height={settings.newUiVisualizerHeight}
-                        opacity={settings.newUiVisualizerOpacity}
-                    />
-                </div>
-            )}
-            
-            {/* Song Effects Styles & Overlay */}
-            {activeEffect && !settings.bulkDownloadMode && (
-                <div className="animate-fade-in">
-                    <SongEffectRenderer effect={activeEffect} audio={activeAudio} songName={selectedSong?.name} />
-                </div>
-            )}
-
-            {isSettingsOpen && <SettingsPopup isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />}
+        <div className="relative h-dvh flex flex-col antialiased font-saira text-slate-200 bg-[#090b10] overflow-hidden">
+            {isSettingsOpen && <SettingsPopup isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} initialCategory={settingsCategory} />}
             {isFaqOpen && <FAQPopup isOpen={isFaqOpen} onClose={() => setIsFaqOpen(false)} />}
-            {isAboutOpen && <AboutPopup isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />}
-            {isShareCardOpen && (
-                <ShareCardPopup
-                    song={selectedSong}
-                    isOpen={isShareCardOpen}
-                    onClose={() => setIsShareCardOpen(false)}
+            {isAboutOpen && (
+                <AboutPopup
+                    isOpen={isAboutOpen}
+                    onClose={() => setIsAboutOpen(false)}
+                    version={version}
+                    isLoadingVersion={isLoadingVersion}
+                    errorVersion={errorVersion}
+                    onRetryVersion={loadVersion}
                 />
             )}
-            {isSourceOpen && <SourcePopup isOpen={isSourceOpen} onClose={() => setIsSourceOpen(false)} />}
+            <ResourceErrorPopup onSwitchProxy={() => openSettings('proxy')} />
+            <InstructionPopup
+                isOpen={showInstruction}
+                onConfirm={handleInstructionConfirm}
+                onCancel={() => setShowInstruction(false)}
+            />
+            <ShareCardPopup song={selectedSong} isOpen={isShareCardOpen} onClose={() => setIsShareCardOpen(false)} />
+            <SourcePopup isOpen={isSourceOpen} onClose={() => setIsSourceOpen(false)} />
+            <DnsPopup isOpen={isDnsOpen} onClose={() => setIsDnsOpen(false)} />
+            {patchedChartPrompt && (
+                <PatchedChartPopup
+                    isOpen={!!patchedChartPrompt}
+                    onCancel={() => setPatchedChartPrompt(null)}
+                    onDownloadOriginal={handlePatchedOriginal}
+                    onDownloadPatched={handlePatchedDownload}
+                    reason={patchedChartPrompt.reason}
+                    songName={selectedSong?.name}
+                    difficulty={patchedChartPrompt.difficulty}
+                />
+            )}
             {blacklistWarning && (
-                <BlacklistWarningPopup 
+                <BlacklistWarningPopup
                     isOpen={!!blacklistWarning}
                     onCancel={handleBlacklistCancel}
                     onConfirm={handleBlacklistConfirm}
                     reason={blacklistWarning.reason}
                 />
             )}
-            
-            {/* Content Layer - Relative Z-10 */}
-            <div className={`relative z-10 flex flex-col min-h-screen ${activeEffect === 'glitch' ? 'effect-glitch-active' : ''} ${activeEffect === 'cracking' ? 'effect-cracking-active' : ''}`}>
-                 {/* Standard background decorative shape, only visible if New UI bg isn't loaded */}
-                 <div 
-                     className={`absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80 transition-opacity duration-500 ${!isBgLoaded ? 'opacity-100' : 'opacity-0'}`} 
-                     aria-hidden="true"
-                 >
-                     <div 
-                         className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-[#80ff89] to-[#22d3ee] opacity-20 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]" 
-                         style={{
-                             clipPath: 'polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)'
-                         }}
-                     ></div>
-                 </div>
 
-                <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
-                    <Header 
-                        onSettingsClick={() => setIsSettingsOpen(true)} 
-                        onFaqClick={() => setIsFaqOpen(true)}
-                        onAboutClick={() => setIsAboutOpen(true)}
-                        onSourceClick={() => setIsSourceOpen(true)}
-                    />
-
-                    {!settings.bulkDownloadMode && (
-                        <div className="mt-8 flex flex-col items-center gap-6 animate-fade-in">
-                            <VersionCard isLoading={isLoadingVersion} error={errorVersion} version={version} />
-                        </div>
-                    )}
-
-                    <main className="mt-8">
-                        {settings.bulkDownloadMode ? (
-                            <BulkDownloadPanel
-                                songs={sortedSongs}
-                                isLoading={isLoadingSongs}
-                                error={errorSongs}
-                                onExit={() => setSettings(prev => ({ ...prev, bulkDownloadMode: false }))}
-                            />
-                        ) : (
-                            <div className="flex flex-col items-center gap-8 animate-fade-in">
-                               
-                               <SongSelector 
-                                isLoading={isLoadingSongs}
-                                error={errorSongs}
-                                songs={sortedSongs}
-                                selectedSong={selectedSong}
-                                onSongSelect={handleSongSelect}
-                                sortConfig={sortConfig}
-                                onSortConfigChange={setSortConfig}
-                           />
-
-                            {/* Audio Player - Now below SongSelector, hidden if New UI or Audio Preview is off */}
-                            {settings.useNewUi && settings.newUiAudioPreview && (
-                                <div className="flex flex-col items-center justify-center z-20 w-full max-w-lg">
-                                    {activeAudio ? (
-                                        <AudioPlayerControl 
-                                            audio={activeAudio} 
-                                            songName={selectedSong?.name}
-                                            artist={selectedSong?.composer}
-                                        />
-                                    ) : (
-                                        <div className="px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-slate-500 text-sm italic backdrop-blur-sm">
-                                            选择歌曲以播放其音频。
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                           <div className="relative z-30 mt-4 w-full max-w-4xl">
-                                <FileTable selectedSong={selectedSong} onFilesFound={handleFilesFound} />
-                                {selectedSong && availableDifficulties.length > 0 && (
-                                    <div className="relative mt-6">
-                                        <div className="flex justify-center items-center flex-wrap gap-4">
-                                            <DifficultySelector
-                                                difficulties={availableDifficulties}
-                                                selectedDifficulty={selectedDifficulty}
-                                                onSelectDifficulty={setSelectedDifficulty}
-                                                selectedSong={selectedSong}
-                                                highlight={false}
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={handleExportChart}
-                                                disabled={isExporting}
-                                                aria-live="polite"
-                                                className={`relative overflow-hidden px-6 py-2 font-bold rounded-lg shadow-md transition-colors duration-200 flex items-center justify-center gap-2 min-w-[190px] ${
-                                                    exportState.type === 'chart'
-                                                        ? 'bg-purple-800 text-white'
-                                                        : isExporting
-                                                            ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                                                            : 'bg-purple-800 hover:bg-purple-900 text-white'
-                                                }`}
-                                            >
-                                                {exportState.type === 'chart' ? (
-                                                    <>
-                                                        <Spinner />
-                                                        <span>导出中...</span>
-                                                    </>
-                                                ) : selectedDifficulty ? (
-                                                    `导出为谱面（${selectedDifficulty}）`
-                                                ) : (
-                                                    '导出全部难度'
-                                                )}
-                                                {exportState.type === 'chart' && (
-                                                    <div 
-                                                        className="absolute bottom-0 left-0 h-0.5 bg-brand-cyan/75 transition-all duration-150"
-                                                        style={{ width: `${exportState.progress.toFixed(0)}%` }}
-                                                    />
-                                                )}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={handleExportAllAssets}
-                                                disabled={!selectedSong || isExporting || files.length === 0}
-                                                aria-live="polite"
-                                                className={`relative overflow-hidden px-6 py-2 font-bold rounded-lg shadow-md transition-colors duration-200 flex items-center justify-center gap-2 min-w-[190px] ${
-                                                    exportState.type === 'phira'
-                                                        ? 'bg-indigo-700 text-white'
-                                                        : !selectedSong || isExporting || files.length === 0
-                                                            ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                                                            : 'bg-indigo-700 hover:bg-indigo-800 text-white'
-                                                }`}
-                                            >
-                                                {exportState.type === 'phira' ? (
-                                                    <>
-                                                        <Spinner />
-                                                        <span>导出中...</span>
-                                                    </>
-                                                ) : exportState.type === 'chart' ? (
-                                                    // 另一个导出在跑，说明为什么这个点不了
-                                                    '等待中'
-                                                ) : (
-                                                    '导出全部资源'
-                                                )}
-                                                {exportState.type === 'phira' && (
-                                                    <div
-                                                        className="absolute bottom-0 left-0 h-0.5 bg-brand-cyan/75 transition-all duration-150"
-                                                        style={{ width: `${exportState.progress.toFixed(0)}%` }}
-                                                    />
-                                                )}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* 谱面分享卡片入口：选中歌曲后即可生成（可在设置里关闭） */}
-                                {selectedSong && settings.shareCardEnabled && (
-                                    <div className="mt-5 flex justify-center">
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsShareCardOpen(true)}
-                                            className="px-5 py-2.5 font-bold rounded-lg shadow-md transition-colors duration-200 flex items-center justify-center bg-cyan-700 hover:bg-cyan-800 text-white"
-                                        >
-                                            生成分享卡片
-                                        </button>
-                                    </div>
-                                )}
-                           </div>
-                        </div>
-                        )}
-                    </main>
-                </div>
-                
-                {!settings.bulkDownloadMode && (
-                    <footer 
-                        className={`w-full mt-16 transition-all duration-300 flex justify-center animate-fade-in ${
-                            settings.useNewUi 
-                                ? 'pb-10' 
-                                : 'py-8 text-slate-500 border-t border-transparent'
-                        }`}
-                    >
-                        <div className={`
-                            text-center text-sm transition-all duration-300
-                            ${settings.useNewUi 
-                                ? 'bg-slate-950/50 backdrop-blur-md border border-white/10 rounded-3xl text-slate-200 shadow-2xl px-8 py-4 mx-4' 
-                                : 'container mx-auto px-4 sm:px-6 lg:px-8'
-                            }
-                        `}>
-                            <p>
-                                有关此项目的更多信息，请查看 <a href="https://github.com/swordalt/phigros-chart-downloader/" className={`transition-colors duration-200 ${settings.useNewUi ? 'text-brand-cyan hover:text-cyan-300' : 'hover:text-slate-400 underline decoration-slate-600'}`}>https://github.com/swordalt/phigros-chart-downloader/</a>。
-                            </p>
-                            <p className="mt-2">
-                                项目由「sword」创建。| 网站使用 AI 和其他工具优化。
-                            </p>
-                        </div>
-                    </footer>
+            {isMobile ? (
+                <MobileLayout
+                    songs={sortedSongs}
+                    isLoadingSongs={isLoadingSongs}
+                    errorSongs={errorSongs}
+                    selectedSong={selectedSong}
+                    onSongSelect={handleSongSelect}
+                    sortConfig={sortConfig}
+                    onSortConfigChange={setSortConfig}
+                    version={version}
+                    isLoadingVersion={isLoadingVersion}
+                    versionError={errorVersion}
+                    onRetryVersion={loadVersion}
+                    onAboutClick={() => setIsAboutOpen(true)}
+                    onFaqClick={() => setIsFaqOpen(true)}
+                    onSettingsClick={() => openSettings('export')}
+                    onSourceClick={() => setIsSourceOpen(true)}
+                    onDnsClick={() => setIsDnsOpen(true)}
+                    bgImage={bgImage}
+                    isBgLoaded={isBgLoaded}
+                    audio={activeAudio}
+                    files={files}
+                    isLoadingFiles={isLoadingFiles}
+                    difficulties={availableDifficulties}
+                    selectedDifficulty={selectedDifficulty}
+                    onSelectDifficulty={setPreferredDifficulty}
+                    exportState={exportState}
+                    onExportChart={handleExportChart}
+                    onExportAllAssets={handleExportAllAssets}
+                    onExportAllDifficulties={handleExportAllDifficulties}
+                    onShareCardClick={() => setIsShareCardOpen(true)}
+                    onDownloaded={handleFileDownloaded}
+                    bulkPanel={settings.bulkDownloadMode ? renderBulkPanel() : null}
+                    toast={toast}
+                    effect={activeEffect}
+                    songName={selectedSong?.name}
+                />
+            ) : (
+            <div className="relative z-10 flex-1 min-h-0 flex flex-col">
+                {/* 频谱可视化：贴在内容之下、背景之上 */}
+                {settings.newUiShowVisualizer && activeAudio && !settings.bulkDownloadMode && (
+                    <div className="absolute inset-0 z-0 pointer-events-none">
+                        <AudioVisualizer
+                            audio={activeAudio}
+                            color={settings.newUiVisualizerColor}
+                            height={settings.newUiVisualizerHeight}
+                            opacity={settings.newUiVisualizerOpacity}
+                        />
+                    </div>
                 )}
+                {/* 歌曲特效层 */}
+                {activeEffect && !settings.bulkDownloadMode && (
+                    <SongEffectRenderer effect={activeEffect} audio={activeAudio} songName={selectedSong?.name} />
+                )}
+
+                <Header
+                    version={version}
+                    isLoadingVersion={isLoadingVersion}
+                    versionError={errorVersion}
+                    onRetryVersion={loadVersion}
+                    onSettingsClick={() => openSettings('export')}
+                    onFaqClick={() => setIsFaqOpen(true)}
+                    onAboutClick={() => setIsAboutOpen(true)}
+                    onSourceClick={() => setIsSourceOpen(true)}
+                    onDnsClick={() => setIsDnsOpen(true)}
+                />
+
+                <main className="relative z-10 flex-1 min-h-0 grid grid-rows-[minmax(0,40%)_minmax(0,1fr)] md:grid-rows-1 md:grid-cols-[340px_minmax(0,1fr)]">
+                    <aside className="min-h-0 border-b md:border-b-0 md:border-r border-white/[.06]">
+                        <SongSelector
+                            isLoading={isLoadingSongs}
+                            error={errorSongs}
+                            songs={sortedSongs}
+                            selectedSong={selectedSong}
+                            onSongSelect={handleSongSelect}
+                            sortConfig={sortConfig}
+                            onSortConfigChange={setSortConfig}
+                        />
+                    </aside>
+
+                    <section className="relative min-h-0">
+                        {settings.bulkDownloadMode ? renderBulkPanel() : (
+                            <SongWorkspace
+                                song={selectedSong}
+                                bgImage={bgImage}
+                                isBgLoaded={isBgLoaded}
+                                audio={activeAudio}
+                                files={files}
+                                isLoadingFiles={isLoadingFiles}
+                                difficulties={availableDifficulties}
+                                selectedDifficulty={selectedDifficulty}
+                                onSelectDifficulty={setPreferredDifficulty}
+                                exportState={exportState}
+                                onExportChart={handleExportChart}
+                                onExportAllAssets={handleExportAllAssets}
+                                onExportAllDifficulties={handleExportAllDifficulties}
+                                onShareCardClick={settings.shareCardEnabled ? () => setIsShareCardOpen(true) : undefined}
+                                onDownloaded={handleFileDownloaded}
+                            />
+                        )}
+
+                        {toast && (
+                            <div
+                                key={toast.id}
+                                role="status"
+                                className="motion-toast absolute left-1/2 bottom-5 z-30 flex items-center gap-2.5 max-w-[calc(100%-32px)] pl-3 pr-4 py-2.5 rounded-[10px] bg-[rgba(12,15,22,.95)] border border-[rgba(34,211,238,.3)] shadow-[0_20px_50px_rgba(0,0,0,.5)] text-[13px] text-slate-200"
+                            >
+                                <span className="w-5 h-5 flex-none rounded-full bg-[#22d3ee] flex items-center justify-center">
+                                    <svg width="12" height="12" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="#06141a"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                                </span>
+                                <span className="truncate">{toast.text}</span>
+                            </div>
+                        )}
+                    </section>
+                </main>
+
+                <footer className="relative z-10 flex-none min-h-10 flex flex-wrap items-center justify-center text-center gap-x-6 gap-y-0.5 px-4 sm:px-6 py-2 border-t border-white/[.1] bg-[#05070a] text-xs text-slate-500">
+                    <span>本站基于 <a href={REPO_URL} target="_blank" rel="noreferrer" className="text-[#22d3ee] hover:text-[#67e8f9]">Phigros Chart Downloader</a> 二次开发，非 Phigros 官方项目。</span>
+                    <span className="hidden sm:inline">全部素材版权归各自权利人所有。</span>
+                </footer>
             </div>
+            )}
         </div>
     );
 };

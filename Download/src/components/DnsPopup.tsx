@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { DialogFrame, DialogHeader, DialogFooter, Button } from './ui/Dialog';
 
 interface DnsPopupProps {
     isOpen: boolean;
@@ -15,8 +16,8 @@ interface DnsProvider {
 }
 
 const DNS_PROVIDERS: DnsProvider[] = [
-    { id: 'alidns', name: '阿里 AliDNS', primary: '223.5.5.5', secondary: '223.6.6.6', tag: '国内 · 推荐', desc: '阿里巴巴公共 DNS，国内速度快、解析稳定。' },
-    { id: 'dnspod', name: '腾讯 DNSPod', primary: '119.29.29.29', secondary: '119.28.28.28', tag: '国内 · 推荐', desc: '腾讯云公共 DNS，国内延迟低，支持 DoH。' },
+    { id: 'alidns', name: '阿里 AliDNS', primary: '223.5.5.5', secondary: '223.6.6.6', tag: '国内', desc: '阿里巴巴公共 DNS，国内速度快、解析稳定。' },
+    { id: 'dnspod', name: '腾讯 DNSPod', primary: '119.29.29.29', secondary: '119.28.28.28', tag: '国内', desc: '腾讯云公共 DNS，国内延迟低，支持 DoH。' },
     { id: '114dns', name: '114DNS', primary: '114.114.114.114', secondary: '114.114.115.115', tag: '国内', desc: '老牌公共 DNS，简单可靠。' },
     { id: 'baidu', name: '百度 DNS', primary: '180.76.76.76', tag: '国内', desc: '百度公共 DNS，国内可用性高。' },
     { id: 'google', name: '谷歌 Google', primary: '8.8.8.8', secondary: '8.8.4.4', tag: '国际', desc: '全球通用，但国内访问可能不稳定。' },
@@ -73,84 +74,59 @@ export const DnsPopup: React.FC<DnsPopupProps> = ({ isOpen, onClose }) => {
     };
 
     return (
-        <div
-            className="motion-backdrop fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            aria-labelledby="dns-title"
-            role="dialog"
-            aria-modal="true"
-            onClick={onClose}
-        >
-            <div
-                className="motion-dialog relative w-full max-w-md mx-auto overflow-hidden rounded-xl border border-slate-700 shadow-2xl p-6 text-left transform transition-all bg-slate-900/80 backdrop-blur-md"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <h2 id="dns-title" className="text-2xl font-bold text-brand-cyan mb-2">
-                    DNS 切换
-                </h2>
-                <p className="text-sm text-slate-400 leading-relaxed mb-5">
+        <DialogFrame onClose={onClose} labelledBy="dns-title" className="w-full max-w-[520px] max-h-[min(80dvh,680px)]">
+            <DialogHeader id="dns-title" eyebrow="Network" title="DNS 切换" onClose={onClose} />
+
+            <div className="flex-1 min-h-0 overflow-y-auto thin-scroll px-5 sm:px-6 py-4">
+                <p className="text-[13px] leading-[1.6] text-slate-400 m-0 mb-4">
                     GitHub 在国内网络环境下访问较慢，切换合适的公共 DNS 可改善解析速度。点击「复制」获取配置后，请到系统网络设置中粘贴生效。
                 </p>
 
-                <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="flex flex-col gap-2.5">
                     {DNS_PROVIDERS.map(provider => {
                         const isActive = selected === provider.id;
                         const isCopied = copied === provider.id;
                         return (
                             <div
                                 key={provider.id}
-                                className={`rounded-lg border p-4 transition-colors duration-200 ${
+                                className={`rounded-[10px] border px-3.5 py-3 transition-colors ${
                                     isActive
-                                        ? 'border-brand-cyan/70 bg-slate-800/60'
-                                        : 'border-slate-700 bg-slate-800/30 hover:border-slate-600'
+                                        ? 'border-[rgba(34,211,238,.5)] bg-[rgba(34,211,238,.05)]'
+                                        : 'border-white/[.07] bg-white/[.015] hover:border-white/[.18]'
                                 }`}
                             >
-                                <div className="flex items-center justify-between gap-3 mb-2">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="font-semibold text-slate-200">{provider.name}</span>
-                                        <span
-                                            className={`text-xs px-2 py-0.5 rounded-full ${
-                                                provider.tag.startsWith('国内')
-                                                    ? 'bg-brand-cyan/15 text-brand-cyan'
-                                                    : 'bg-slate-600/40 text-slate-300'
-                                            }`}
-                                        >
+                                <div className="flex items-center justify-between gap-3 mb-1.5">
+                                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                        <span className="text-sm font-semibold text-slate-200">{provider.name}</span>
+                                        <span className={`font-mono text-[10px] font-medium px-1.5 py-0.5 rounded ${provider.tag === '国内' ? 'text-[#22d3ee] bg-[rgba(34,211,238,.1)]' : 'text-slate-400 bg-white/[.06]'}`}>
                                             {provider.tag}
                                         </span>
                                         {isActive && (
-                                            <span className="text-xs text-brand-cyan font-medium">使用中</span>
+                                            <span className="font-mono text-[10px] font-medium text-[#22d3ee]">使用中</span>
                                         )}
                                     </div>
-                                    <button
-                                        type="button"
+                                    <Button
+                                        variant={isCopied ? 'primary' : 'outline'}
                                         onClick={() => handleCopy(provider)}
-                                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors duration-200 ${
-                                            isCopied
-                                                ? 'bg-brand-cyan text-slate-900'
-                                                : 'bg-slate-600 hover:bg-slate-500 text-white'
-                                        }`}
                                     >
                                         {isCopied ? '已复制' : '复制'}
-                                    </button>
+                                    </Button>
                                 </div>
-                                <p className="font-mono text-sm text-slate-300">
+                                <p className="font-mono text-xs text-slate-300 m-0">
                                     {provider.primary}
                                     {provider.secondary ? ` / ${provider.secondary}` : ''}
                                 </p>
-                                <p className="text-xs text-slate-500 mt-1">{provider.desc}</p>
+                                <p className="text-xs text-slate-500 m-0 mt-1">{provider.desc}</p>
                             </div>
                         );
                     })}
                 </div>
-
-                <div className="mt-6 flex justify-end">
-                    <button
-                        onClick={onClose}
-                        className="px-6 py-2 font-bold rounded-lg shadow-md transition-colors duration-200 bg-slate-600 hover:bg-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-slate-500"
-                    >
-                        关闭
-                    </button>
-                </div>
             </div>
-        </div>
+
+            <DialogFooter>
+                <span className="hidden sm:inline font-mono text-[10px] font-medium tracking-[.1em] text-slate-600">DNS 只影响域名解析，不影响站点数据</span>
+                <Button variant="primary" size="md" onClick={onClose}>关闭</Button>
+            </DialogFooter>
+        </DialogFrame>
     );
 };

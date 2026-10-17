@@ -1,31 +1,39 @@
+
 export interface FAQEntry {
   question: string;
-  // Fix: Changed answer type from React.ReactNode to string to avoid JSX in a .ts file.
   answer: string;
+  // Optional link appended to the end of the answer.
+  link?: { text: string; url: string };
 }
+
 export const faqData: FAQEntry[] = [
   {
-    question: "如何下载谱面以在 Phira 或 RPE 中使用？",
-    answer: "首先，从下拉菜单中选择一首歌曲。其次，选择一个可用的难度（EZ、HD、IN 或 AT）。第三，点击「导出为谱面」按钮。",
-  },
-   {
-    question: "哪些程序可以使用这些文件？",
-    answer: "游玩方面，Phira 有不错的支持，但在某些谱面中可能会出现视觉 bug。如果你不介意的话，phi-sim 有完美的支持，但它只能在网页浏览器中运行且非常老旧。编辑方面，RPE 有不错的支持；只是不要尝试保存谱面，否则它会尝试将其转换为 100MB 的 RPE json。其他编辑器如 phichain 也可能支持官方格式。",
+    question: "怎么下载能在 Phira 或 RPE 里用的谱面？",
+    answer: "从左侧列表挑一首曲子，选好难度（EZ / HD / IN / AT），然后点「导出谱面」即可。",
   },
   {
-    question: "什么是 PEZ 文件？",
-    answer: "PEZ 文件是 Phi Edit ZIP（PEZ）；本质上就是一个简单的 ZIP 文件。大多数程序应该能检测并处理这种文件类型，但你可以在设置中将导出的文件扩展名改为通用的 ZIP。",
+    question: "这些文件能在哪些程序里用？",
+    answer: "试玩首选 Phira —— 新版本对官方谱面格式的兼容性很好。其他模拟器（如 phi-sim）虽然已停止维护，也照样能用。",
   },
   {
-    question: "为什么较新的歌曲没有出现在这里？",
-    answer: "本网站依赖于第三方 GitHub 仓库。如果他们没有添加较新的内容，这里就不会显示。",
+    question: "PEZ 文件是什么？",
+    answer: "Phi Edit ZIP，本质上就是个 ZIP 包。多数程序都能识别处理，也可以在设置里把导出扩展名改成 ZIP。",
   },
   {
-    question: "网站坏了，无法正常工作。",
-    answer: '确保你可以访问 GitHub，并且没有被限流或封锁。同时检查任何浏览器扩展，如广告拦截器和隐私保护工具，它们可能会阻止 GitHub 原始文件。',
+    question: "为什么这里没有更新的曲子？",
+    answer: "本站数据来自第三方 GitHub 仓库，上游没收录的新曲，这里就不会出现。",
   },
-    {
-    question: "为什么没有愚人节或 Legacy 谱面？",
-    answer: '本项目旨在与最新版本的 Phigros 同步。此外，愚人节谱面的歌曲 ID 等通常很奇怪，将它们整合到本网站中会很麻烦。',
+  {
+    question: "网站打不开或一直报错怎么办？",
+    answer: "先确认能访问 GitHub 且没有被限流。隐私类插件也可能拦截 raw.githubusercontent.com 的下载 —— 或者在设置里换一个加速源试试。",
+  },
+  {
+    question: "为什么访问前要答题？",
+    answer: "本站设置了答题鉴权，通过后凭证在本浏览器内有效 12 小时，过期重新答题即可。",
+  },
+  {
+    question: "为什么没有愚人节谱面和旧版（Legacy）谱面？",
+    answer: "这类谱面已经有不少专门的获取渠道，比如",
+    link: { text: '这个 Google 云端硬盘文件夹', url: 'https://drive.google.com/drive/folders/1LcJ2Ublu6TNNTqUph61ItzGwJTqG-IQu' },
   },
 ];

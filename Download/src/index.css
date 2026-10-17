@@ -2,7 +2,10 @@
 
 @theme {
   --font-saira: Saira, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
   --color-brand-cyan: #22d3ee;
+  --color-ink: #090b10;
+  --color-panel: rgba(12, 15, 22, 0.97);
   --color-brand-purple: #a855f7;
   --animate-marquee: marquee 15s linear infinite;
   --animate-shake: shake 0.2s ease-in-out 0s 2;
@@ -58,47 +61,19 @@
   transition: opacity 220ms ease, translate 220ms cubic-bezier(0.16, 1, 0.3, 1), border-color 220ms ease;
 }
 
-.motion-subgroup {
-  animation: subgroupIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  transform-origin: top center;
+/* Blur disabled: drop backdrop blur and fade the content behind with black instead. */
+html[data-blur="off"] [class*="backdrop-blur"] {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  background-image: linear-gradient(rgba(0, 0, 0, .35), rgba(0, 0, 0, .35));
 }
-
-.motion-shake {
-  animation: shake 0.2s ease-in-out 0s 2;
+html[data-blur="off"] .motion-backdrop {
+  animation-name: backdropFadeIn;
+  background-color: rgba(0, 0, 0, .88);
 }
-
-.custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgb(71 85 105) transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgb(71 85 105);
-  border-radius: 9999px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(100 116 139);
-}
-
-@keyframes subgroupIn {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+@keyframes backdropFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes backdropIn {
@@ -145,6 +120,18 @@
   }
 }
 
+/* Phones: dialogs rise from the bottom edge as sheets / full-height panels. */
+@keyframes sheetIn {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@media (max-width: 767.98px) {
+  .motion-dialog {
+    animation: sheetIn 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .motion-backdrop,
   .motion-dialog,
@@ -157,12 +144,105 @@
   .motion-settings-group {
     transition-duration: 1ms;
   }
+}
 
-  .motion-subgroup {
-    animation: none;
+/* Hide all scrollbars (scrolling still works) */
+* {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+    display: none;
+}
+
+/* Always-on bottom fade as a scroll hint; padding lets the last item scroll clear of it */
+.scroll-fade {
+    padding-bottom: 2rem;
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2rem), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 2rem), transparent);
+}
+
+html, body {
+    background: #090b10;
+}
+
+/* Thin, visible scrollbar for the main scroll areas */
+.thin-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+.thin-scroll::-webkit-scrollbar {
+    display: block;
+    width: 6px;
+    height: 6px;
+}
+
+.thin-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+}
+
+.thin-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* Hairline accent along the top edge of every dialog */
+.dialog-topline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 1px;
+    pointer-events: none;
+}
+
+.motion-toast {
+    animation: toastIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes toastIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, 8px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+.motion-toast-mobile {
+    animation: toastInMobile 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes toastInMobile {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Attention-seeking glow for the primary export button */
+@keyframes export-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 1.5px rgba(103, 232, 249, 0.9), 0 0 10px 1px rgba(34, 211, 238, 0.45), 0 0 22px 2px rgba(34, 211, 238, 0.25);
   }
-
-  .motion-shake {
+  50% {
+    box-shadow: 0 0 0 1.5px rgba(207, 250, 254, 1), 0 0 18px 4px rgba(34, 211, 238, 0.7), 0 0 36px 8px rgba(34, 211, 238, 0.4);
+  }
+}
+.export-glow:not(:disabled) {
+  animation: export-glow 2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .export-glow:not(:disabled) {
     animation: none;
+    box-shadow: 0 0 0 1.5px rgba(103, 232, 249, 0.9), 0 0 16px 3px rgba(34, 211, 238, 0.5);
   }
 }

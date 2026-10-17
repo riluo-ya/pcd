@@ -2,8 +2,54 @@ export interface UpdateLog {
     date: string;
     content: string;
 }
+
 export const projectDescription = "Phigros 谱面下载器是一个按曲目浏览 Phigros 资源的项目。此外，它还具备将资源直接导出为可在 Phira 或 RPE 中游玩的谱面文件的实用功能。它还配有简洁易用的用户界面，以及音频播放器（开发中）和特定曲目的异常特效。";
+
 export const updateLogs: UpdateLog[] = [
+	{
+        date: "2026-10-17",
+        content: `
+            <ul class="list-disc list-inside space-y-1">
+                <li>整体对齐上游最新架构：曲库列表 + 谱面工作区双栏布局。</li>
+                <li>新增手机端专属布局，移动端浏览与下载体验重构。</li>
+                <li>新增 RPE 谱面格式转换（可在设置中开启）。</li>
+                <li>新增 GitHub 令牌鉴权，降低资源请求被限流的概率。</li>
+                <li>新增修复版谱面提示、资源错误自动提醒与重试。</li>
+                <li>保留本站功能：批量下载面板、分享卡片、歌曲特效、频谱可视化、多加速源切换。</li>
+                <li>保留本站功能：答题鉴权与导航中心。</li>
+            </ul>
+        `
+    },
+	{
+        date: "v2.0.2",
+        content: `
+            <ul class="list-disc list-inside space-y-1">
+                <li>为谱面导出按钮添加了发光效果。</li>
+                <li>新增「自动播放音频」选项，开启后自动播放。</li>
+                <li>更新了歌曲别名。</li>
+            </ul>
+        `
+    },
+	{
+        date: "v2.0.1",
+        content: `
+            <ul class="list-disc list-inside space-y-1">
+                <li>改进了单文件表格。</li>
+                <li>重新调整了背景色深浅。</li>
+                <li>为谱面和单个文件增加了文件大小预览。</li>
+            </ul>
+        `
+    },
+	{
+        date: "v2.0.0",
+        content: `
+            <ul class="list-disc list-inside space-y-1">
+                <li>界面与下载流程完全重新设计。</li>
+                <li>新增关闭模糊效果的选项。</li>
+                <li>新增可选的 GitHub 访问令牌设置。</li>
+            </ul>
+        `
+    },
     {
         date: "2026-03-08",
         content: `

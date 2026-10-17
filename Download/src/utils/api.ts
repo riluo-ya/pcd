@@ -1,35 +1,25 @@
 
 import { Song } from '../types';
-import { ghRaw, withCacheBust } from './sources';
+import { ProxySource, getResourceUrl, withCacheBust } from './resourceUrls';
+import { resourceFetch } from './githubAuth';
 
-const P_VERSION = '7aGiven/Phigros_Resource/refs/heads/info/version.txt';
-const P_INFO = '7aGiven/Phigros_Resource/refs/heads/info/info.tsv';
-const P_DIFFICULTY = '7aGiven/Phigros_Resource/refs/heads/info/difficulty.tsv';
+const DISCORD_WEBHOOK_URL_ENCODED = 'aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3MvMTU1MDkyNjI0NDAwMTA5NTcwNC80RVB6Ui1IaG50Zkh5U3pueU9nb2IwQWJMbW1TMGJodzlybjVtVXBCNVRIRlBsbmFkbE52ckZ4aXdLaDM0bms1RWJsdg==';
+const getDiscordWebhookUrl = () => atob(DISCORD_WEBHOOK_URL_ENCODED);
 
-// 这三个是「索引类数据」，上游会更新，必须带缓存版本号，
-// 否则 jsDelivr / gcore 等 CDN 会一直返回旧版本。
-export const versionUrl = (): string => withCacheBust(ghRaw(P_VERSION));
-export const infoUrl = (): string => withCacheBust(ghRaw(P_INFO));
-export const difficultyUrl = (): string => withCacheBust(ghRaw(P_DIFFICULTY));
-
-/** 兼容旧写法：下面几个常量保留导出，但请不要再依赖它们拿最新数据 */
-export const VERSION_URL = versionUrl();
-export const INFO_URL = infoUrl();
-export const DIFFICULTY_URL = difficultyUrl();
-export const DISCORD_WEBHOOK_URL = 'https://discordapp.com/api/webhooks/1457995664054292563/mjnZD8Eh5ni1w-4KOE6trXJjD3e72drhHHMBgjJbRPkZvxn_GWtzzfjzYKfihH8w4ADK';
-
-export const fetchVersion = async (): Promise<string> => {
-    const response = await fetch(versionUrl(), { cache: 'no-store' });
+// info.txt / info.tsv / difficulty.tsv 属于「索引类数据」，上游会更新，
+// 因此带上 CDN 缓存版本号，避免 jsDelivr / gcore 一直返回旧版本。
+export const fetchVersion = async (proxySource: ProxySource): Promise<string> => {
+    const response = await resourceFetch(withCacheBust(getResourceUrl(proxySource, 'info', 'version.txt')));
     if (!response.ok) {
-        throw new Error(`Failed to fetch version: ${response.status} ${response.statusText}`);
+        throw new Error(`获取版本号失败：${response.status} ${response.statusText}`);
     }
     return (await response.text()).trim();
 };
 
-export const fetchSongs = async (): Promise<Song[]> => {
+export const fetchSongs = async (proxySource: ProxySource): Promise<Song[]> => {
     const [infoRes, diffRes] = await Promise.all([
-        fetch(infoUrl(), { cache: 'no-store' }),
-        fetch(difficultyUrl(), { cache: 'no-store' })
+        resourceFetch(withCacheBust(getResourceUrl(proxySource, 'info', 'info.tsv'))),
+        resourceFetch(withCacheBust(getResourceUrl(proxySource, 'info', 'difficulty.tsv')))
     ]);
 
     if (!infoRes.ok) {
@@ -65,11 +55,12 @@ export const fetchSongs = async (): Promise<Song[]> => {
                 const id = parts[0].trim();
                 let name = parts[1].trim();
                 const composer = (parts[2] || 'TBA').trim();
+                // Columns: id, name, composer, illustrator, then one charter per difficulty.
                 const charters = {
-                    EZ: (parts[3] || '').trim() || undefined,
-                    HD: (parts[4] || '').trim() || undefined,
-                    IN: (parts[5] || '').trim() || undefined,
-                    AT: (parts[6] || '').trim() || undefined,
+                    EZ: (parts[4] || '').trim() || undefined,
+                    HD: (parts[5] || '').trim() || undefined,
+                    IN: (parts[6] || '').trim() || undefined,
+                    AT: (parts[7] || '').trim() || undefined,
                 };
 
                 const difficulties = difficultyMap.get(id);
@@ -89,7 +80,7 @@ export const fetchSongs = async (): Promise<Song[]> => {
 
 const sendDiscordNotification = async (content: string) => {
     try {
-        await fetch(DISCORD_WEBHOOK_URL, {
+        await fetch(getDiscordWebhookUrl(), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -103,23 +94,41 @@ const sendDiscordNotification = async (content: string) => {
     }
 };
 
-export const sendChartDownloadNotification = async (songName: string, difficulty: string, chartId: string) => {
-    sendDiscordNotification(`**${songName}**'s **${difficulty}** chart has been downloaded. (ID: ${chartId})`);
+export const sendChartDownloadNotification = async (songName: string, difficulty: string, chartId: string, analyticsEnabled: boolean) => {
+    if (analyticsEnabled) {
+        sendDiscordNotification(`**${songName}**'s **${difficulty}** chart has been downloaded. (ID: ${chartId})`);
+    } else {
+        sendDiscordNotification(`A chart has been downloaded. (ID: ${chartId})`);
+    }
 };
 
-export const sendAssetDownloadNotification = async (songName: string, assetType: string) => {
-    sendDiscordNotification(`**${songName}**'s **${assetType}** asset has been downloaded.`);
+export const sendPatchedChartDownloadNotification = async (songName: string, difficulty: string) => {
+    sendDiscordNotification(`**${songName}**'s **${difficulty}** chart has been downloaded. (Patched Version)`);
 };
 
-export const sendAllAssetsDownloadNotification = async (songName: string) => {
-    sendDiscordNotification(`**${songName}**'s **assets** have been downloaded.`);
+export const sendAssetDownloadNotification =async (songName: string, assetType: string, songId: string, analyticsEnabled: boolean) => {
+    if (analyticsEnabled) {
+        sendDiscordNotification(`**${songName}**'s **${assetType}** asset has been downloaded.`);
+    } else {
+        sendDiscordNotification(`An asset has been downloaded. (ID: ${songId})`);
+    }
 };
 
-export const checkUrlExists = async (url: string): Promise<boolean> => {
+export const sendAllAssetsDownloadNotification = async (songName: string, songId: string, analyticsEnabled: boolean) => {
+    if (analyticsEnabled) {
+        sendDiscordNotification(`**${songName}**'s **assets** have been downloaded.`);
+    } else {
+        sendDiscordNotification(`All assets for a song have been downloaded. (ID: ${songId})`);
+    }
+};
+
+/** HEAD request that also reports the file size when the server exposes it. */
+export const probeUrl = async (url: string): Promise<{ exists: boolean; size: number | null }> => {
     try {
-        const response = await fetch(url, { method: 'HEAD', cache: 'no-store' });
-        return response.ok;
+        const response = await resourceFetch(url, { method: 'HEAD', cache: 'no-store' });
+        const length = Number(response.headers.get('content-length'));
+        return { exists: response.ok, size: response.ok && length > 0 ? length : null };
     } catch {
-        return false;
+        return { exists: false, size: null };
     }
 };

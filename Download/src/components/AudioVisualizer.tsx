@@ -86,7 +86,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ audio, color, 
         if (!canvasRef.current) return;
 
         const canvas = canvasRef.current;
-        let dataArray: Uint8Array | null = null;
+        let dataArray: Uint8Array<ArrayBuffer> | null = null;
         let isRunning = true;
 
         // Use ResizeObserver to handle canvas resizing efficiently
@@ -115,7 +115,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ audio, color, 
 
             const bufferLength = analyser.frequencyBinCount;
             if (!dataArray || dataArray.length !== bufferLength) {
-                dataArray = new Uint8Array(bufferLength);
+                dataArray = new Uint8Array(new ArrayBuffer(bufferLength));
             }
             
             analyser.getByteFrequencyData(dataArray);

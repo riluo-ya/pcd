@@ -15,9 +15,11 @@ import {
     DIFF_COLOR,
 } from '../utils/bulkFilters';
 import { ChartStats, scanChartStats } from '../utils/chartStats';
+import { getResourceUrl } from '../utils/resourceUrls';
 import { useSettings } from '../contexts/SettingsContext';
 import { exportBulkAssets } from '../utils/export';
 import type { FailedFile } from '../worker/export.worker';
+import { levelOf } from '../utils/shareCard';
 
 // ================= 小组件 =================
 
@@ -105,6 +107,13 @@ const ChipToggle: React.FC<{
 
 // ================= 主组件 =================
 
+interface BulkDownloadPanelProps {
+    songs: Song[];
+    isLoading: boolean;
+    error: string | null;
+    onExit: () => void;
+}
+
 export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isLoading, error, onExit }) => {
     // 打包谱面包时需要用到导出格式（.pez / .zip）与是否附带 info.yml
     const { settings } = useSettings();
@@ -174,6 +183,7 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
         scanChartStats(baseFiltered, {
             signal: ctrl.signal,
             onProgress: p => setScanProgress(p),
+            proxySource: settings.proxySource,
         })
             .then(map => {
                 if (ctrl.signal.aborted) return;
@@ -188,7 +198,8 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
         return () => {
             ctrl.abort();
         };
-    }, [filters.useChartStats, baseSig, baseFiltered]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filters.useChartStats, baseSig, baseFiltered, settings.proxySource]);
 
     // 曲目被筛掉后，把不再可见的选中的也清掉，避免「看不见却会下载」
     useEffect(() => {
@@ -278,6 +289,7 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
                 const failed = await exportBulkAssets(
                     chunk,
                     delaySec,
+                    settings.proxySource,
                     (currentFile, action, songsLeft, percent) =>
                         setProgress({
                             currentFile,
@@ -310,6 +322,7 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
             abortRef.current = null;
             if (!isRetry) setResult(prev => prev);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [delaySec, songs]);
 
     const handleStart = () => {

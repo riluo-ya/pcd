@@ -1,85 +1,67 @@
-
-import React, { useState, useEffect, useRef } from 'react';
-import { ChevronDownIcon } from './Icons';
+import React from 'react';
 import { Song } from '../types';
+import { getExtraChart, getExtraCharts } from '../extraCharts';
+import { DIFFICULTY_ORDER, getDifficultyColor } from '../utils/difficulty';
+import { useSettings } from '../contexts/SettingsContext';
+import { FileInfo } from '../types';
+import { estimateExportZipSize, formatEstimate } from '../utils/exportEstimate';
 
 interface DifficultySelectorProps {
     difficulties: string[];
     selectedDifficulty: string | null;
     onSelectDifficulty: (difficulty: string) => void;
-    selectedSong: Song | null;
-    highlight?: boolean;
+    selectedSong: Song;
+    files: FileInfo[];
 }
 
-export const DifficultySelector: React.FC<DifficultySelectorProps> = ({ difficulties, selectedDifficulty, onSelectDifficulty, selectedSong, highlight }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const wrapperRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => {
-            document.removeEventListener("mousedown", handleClickOutside);
-        };
-    }, [wrapperRef]);
+export const DifficultySelector: React.FC<DifficultySelectorProps> = ({ difficulties, selectedDifficulty, onSelectDifficulty, selectedSong, files }) => {
+    const { settings } = useSettings();
 
     if (difficulties.length === 0) {
         return null;
     }
 
-    const handleSelect = (difficulty: string) => {
-        onSelectDifficulty(difficulty);
-        setIsOpen(false);
-    };
-
-    const getDifficultyLabel = (diff: string) => {
-        if (!selectedSong || !selectedSong.difficulties) return diff;
-        const constant = selectedSong.difficulties[diff as keyof typeof selectedSong.difficulties];
-        return constant ? `${diff} (${constant})` : diff;
-    };
+    // Always show the four standard slots (a missing chart is disabled), plus any extra charts such as SP.
+    const slots = [...DIFFICULTY_ORDER, ...getExtraCharts(selectedSong.id).map(e => e.difficulty)];
 
     return (
-        <div ref={wrapperRef} className="relative w-48">
-            <button
-                type="button"
-                onClick={() => setIsOpen(!isOpen)}
-                className={`flex items-center justify-between w-full h-full px-4 py-2 text-left rounded-lg border bg-slate-800/70 shadow-md backdrop-blur-sm hover:bg-slate-700/80 transition-all duration-200 ${
-                    highlight 
-                        ? 'border-red-500 ring-2 ring-red-500/50 animate-shake' 
-                        : 'border-slate-600'
-                }`}
-                aria-haspopup="listbox"
-                aria-expanded={isOpen}
-            >
-                <span className={`font-bold ${selectedDifficulty ? 'text-slate-100' : 'text-slate-400'}`}>
-                    {selectedDifficulty ? getDifficultyLabel(selectedDifficulty) : '难度'}
-                </span>
-                <ChevronDownIcon className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {isOpen && (
-                <div
-                    className="motion-dropdown-up absolute z-40 w-full bottom-full mb-2 overflow-hidden rounded-lg border border-slate-700 bg-slate-800 shadow-2xl"
-                >
-                    <ul className="max-h-60 overflow-y-auto" role="listbox">
-                        {difficulties.map(diff => (
-                            <li
-                                key={diff}
-                                className="px-4 py-2 cursor-pointer font-medium text-slate-300 hover:bg-brand-cyan/20 hover:text-white transition-colors duration-150"
-                                onClick={() => handleSelect(diff)}
-                                role="option"
-                                aria-selected={selectedDifficulty === diff}
-                            >
-                                {getDifficultyLabel(diff)}
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            )}
+        <div className="flex flex-col gap-2.5">
+            <span className="font-mono text-[10px] font-medium tracking-[.14em] text-slate-500">可选难度</span>
+            <div className={`grid grid-cols-2 ${slots.length > 4 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'} gap-2.5`} role="radiogroup" aria-label="难度">
+                {slots.map(diff => {
+                    const available = difficulties.includes(diff);
+                    const selected = available && diff === selectedDifficulty;
+                    const color = getDifficultyColor(diff);
+                    const key = diff as keyof Song['charters'];
+                    const extra = getExtraChart(selectedSong.id, diff);
+                    const level = selectedSong.difficulties?.[key] ?? extra?.level;
+                    const charter = selectedSong.charters[key];
+                    const tooltip = [extra?.tooltip, settings.advancedInfo && charter ? `谱师：${charter}` : null].filter(Boolean).join('\n');
+                    const estimate = available ? estimateExportZipSize(files, diff, settings.exportIllustrationType) : null;
+                    return (
+                        <button
+                            key={diff}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            disabled={!available}
+                            onClick={() => onSelectDifficulty(diff)}
+                            title={tooltip || undefined}
+                            className="px-4 py-3.5 rounded-[10px] border backdrop-blur-sm flex flex-wrap items-baseline justify-between transition-colors hover:bg-white/[.04] disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                            style={{
+                                borderColor: selected ? '#ffffff' : 'rgba(255,255,255,0.08)',
+                                background: selected ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.015)',
+                            }}
+                        >
+                            <span className="font-bold text-[15px] tracking-[.08em]" style={{ color }}>{diff}</span>
+                            <span className={`text-[26px] font-semibold leading-none ${selected ? 'text-white' : 'text-slate-500'}`}>{available ? (level ?? '?') : 'N/A'}</span>
+                            {estimate !== null && (
+                                <span className="basis-full mt-1.5 font-mono text-[11px] text-slate-500 text-left" title="导出压缩包大小预估（谱面 + 曲绘 + 音频）">{formatEstimate(estimate)}</span>
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
         </div>
     );
 };
