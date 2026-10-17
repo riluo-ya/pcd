@@ -90,7 +90,7 @@ export const AudioPlayerControl: React.FC<AudioPlayerControlProps> = ({ audio, v
             })
             .catch(error => {
                 if (!abortController.signal.aborted) {
-                    console.warn("Could not decode audio duration:", error);
+                    console.warn("无法解析音频时长：", error);
                 }
             });
 
@@ -218,7 +218,7 @@ export const AudioPlayerControl: React.FC<AudioPlayerControlProps> = ({ audio, v
         setIsDragging(false);
         // Resume playback if it was paused (e.g. ended) and we seeked to a valid position
         if (audio.paused && duration > 0 && audio.currentTime < duration) {
-            audio.play().catch(err => console.warn("Could not resume playback:", err));
+            audio.play().catch(err => console.warn("无法恢复播放：", err));
         }
     };
 
@@ -238,7 +238,7 @@ export const AudioPlayerControl: React.FC<AudioPlayerControlProps> = ({ audio, v
 
     const togglePlay = () => {
         if (audio.paused) {
-            audio.play().catch(err => console.warn("Could not play audio:", err));
+            audio.play().catch(err => console.warn("无法播放音频：", err));
         } else {
             audio.pause();
         }
@@ -249,7 +249,7 @@ export const AudioPlayerControl: React.FC<AudioPlayerControlProps> = ({ audio, v
             <button
                 type="button"
                 onClick={togglePlay}
-                aria-label={isPlaying ? 'Pause' : 'Play'}
+                aria-label={isPlaying ? '暂停' : '播放'}
                 className={`${mobile ? 'w-10 h-10' : 'w-8 h-8'} flex-none rounded-full bg-[#22d3ee] hover:bg-[#67e8f9] flex items-center justify-center transition-colors`}
             >
                 {isPlaying ? (
@@ -304,8 +304,8 @@ export const AudioPlayerControl: React.FC<AudioPlayerControlProps> = ({ audio, v
             <button
                 type="button"
                 onClick={toggleMute}
-                aria-label={isMuted ? 'Unmute' : 'Mute'}
-                title={isMuted ? 'Unmute' : 'Mute'}
+                aria-label={isMuted ? '取消静音' : '静音'}
+                title={isMuted ? '取消静音' : '静音'}
                 className={mobile
                     ? 'w-10 h-10 flex-none rounded-full flex items-center justify-center text-slate-400'
                     : 'hidden sm:block text-slate-500 hover:text-slate-200 transition-colors'}

@@ -1,4 +1,5 @@
 import React, { memo } from 'react';
+import { HOME_URL } from '../utils/navLinks';
 
 interface HeaderProps {
     version: string | null;
@@ -48,6 +49,10 @@ export const Header: React.FC<HeaderProps> = memo(({ onSettingsClick, onFaqClick
             <nav className="flex items-center gap-1.5 flex-none">
                 <span className="hidden md:flex"><AssetsPill {...versionProps} /></span>
                 <span className="hidden md:block w-px h-5 bg-white/[.08] mx-2.5" aria-hidden="true" />
+                <a href={HOME_URL} className={`${navButton} border border-white/[.08]`} title="返回导航中心 home.html">
+                    <svg width="15" height="15" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
+                    返回导航
+                </a>
                 <button type="button" onClick={onSourceClick} className={navButton} title="切换加速源">
                     <svg width="15" height="15" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.998 8.998 0 018.716 5.253M12 3a8.998 8.998 0 00-8.716 5.253m0 0A8.983 8.983 0 003 12c0 2.28.851 4.364 2.253 5.953M20.747 8.253A8.983 8.983 0 0121 12c0 2.28-.851 4.364-2.253 5.953M3.253 17.953A8.998 8.998 0 0012 21m8.747-3.047A8.998 8.998 0 0112 21" /></svg>
                     加速源

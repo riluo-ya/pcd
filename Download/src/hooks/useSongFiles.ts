@@ -81,7 +81,7 @@ export const useSongFiles = (selectedSong: Song | null, proxySource: ProxySource
                 setFiles(results.filter((file): file is FileInfo => file !== null));
             })
             .catch(error => {
-                if (!abortController.signal.aborted) console.error('Error fetching files:', error);
+                if (!abortController.signal.aborted) console.error('获取文件列表失败：', error);
             })
             .finally(() => {
                 if (!abortController.signal.aborted) setIsLoading(false);

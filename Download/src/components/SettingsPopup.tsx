@@ -301,7 +301,7 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({ isOpen, onClose, i
                     type="password"
                     value={settings.githubToken}
                     onChange={e => update('githubToken', e.target.value.trim())}
-                    placeholder="ghp_… or github_pat_…"
+                    placeholder="ghp_… 或 github_pat_…"
                     autoComplete="off"
                     spellCheck={false}
                     aria-label="GitHub 个人访问令牌"

@@ -251,7 +251,7 @@ const App: React.FC = () => {
             const playPromise = audio.play();
             if (playPromise !== undefined) {
                 playPromise.catch(error => {
-                    console.warn("Autoplay blocked or audio failed to load:", error);
+                    console.warn("浏览器阻止了自动播放，或音频加载失败：", error);
                 });
             }
         }
@@ -289,7 +289,7 @@ const App: React.FC = () => {
             });
             showToast(`已导出全部资源 · ${fileName}`);
         } catch (error) {
-            console.error("Failed to export all assets: ", error);
+            console.error("导出全部资源失败： ", error);
             reportResourceError(
                 '全部资源导出失败。',
                 () => executeAllAssetsExport(),
@@ -312,7 +312,7 @@ const App: React.FC = () => {
             }, target ? undefined : availableDifficulties);
             showToast(`已导出 ${fileName}`);
         } catch (error) {
-            console.error("Failed to export as chart: ", error);
+            console.error("导出谱面失败： ", error);
             reportResourceError(
                 '谱面导出失败。',
                 () => executeChartExport(target),
@@ -394,7 +394,7 @@ const App: React.FC = () => {
             sendPatchedChartDownloadNotification(selectedSong.name, patched.difficulty);
             showToast(`已导出 ${patched.fileName}`);
         } catch (error) {
-            console.error("Failed to download patched chart: ", error);
+            console.error("下载修复版谱面失败： ", error);
             reportResourceError(
                 '修复版谱面下载失败。',
                 () => handlePatchedDownload(),

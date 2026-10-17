@@ -130,11 +130,23 @@ export const FileTable: React.FC<FileTableProps> = ({ selectedSong, files, isLoa
         );
     };
 
+    /** 文件类型 → 中文展示名，界面上不再出现原始英文类型 */
+    const TYPE_LABEL: Record<string, string> = {
+        'Illustration': '曲绘',
+        'Illustration (Low-Res)': '曲绘（低清）',
+        'Illustration (Blur)': '曲绘（模糊）',
+    };
+    const typeLabel = (type: string): string => {
+        const m = type.match(/^Illustration \((EZ|HD|IN|AT)\)$/);
+        if (m) return `专属曲绘 · ${m[1]}`;
+        return TYPE_LABEL[type] ?? type;
+    };
+
     const describe = (file: FileInfo): { label: string; meta: string } => {
         const chartDiff = getChartDifficulty(file);
-        if (chartDiff) return { label: `Chart · ${chartDiff}`, meta: 'JSON' };
-        if (file.type === 'Audio') return { label: 'Music', meta: 'OGG' };
-        return { label: file.type, meta: RESOLUTIONS[file.type] ?? 'PNG' };
+        if (chartDiff) return { label: `谱面 · ${chartDiff}`, meta: 'JSON' };
+        if (file.type === 'Audio') return { label: '音频', meta: 'OGG' };
+        return { label: typeLabel(file.type), meta: RESOLUTIONS[file.type] ?? 'PNG' };
     };
 
     // Phones have no room for the meta/size columns, so the second line carries the format instead.
@@ -145,9 +157,9 @@ export const FileTable: React.FC<FileTableProps> = ({ selectedSong, files, isLoa
     };
 
     const groups = [
-        { label: 'ILLUSTRATIONS', items: files.filter(f => f.type.startsWith('Illustration')) },
-        { label: 'AUDIO', items: files.filter(f => f.type === 'Audio') },
-        { label: 'CHARTS', items: files.filter(f => f.type.startsWith('Chart')) },
+        { label: '曲绘', items: files.filter(f => f.type.startsWith('Illustration')) },
+        { label: '音频', items: files.filter(f => f.type === 'Audio') },
+        { label: '谱面', items: files.filter(f => f.type.startsWith('Chart')) },
     ].filter(g => g.items.length > 0);
 
     if (isLoading) {
@@ -160,7 +172,7 @@ export const FileTable: React.FC<FileTableProps> = ({ selectedSong, files, isLoa
     }
 
     if (groups.length === 0) {
-        return <p className="py-10 text-center text-sm text-slate-500">No files found for this song.</p>;
+        return <p className="py-10 text-center text-sm text-slate-500">没有找到这首曲子可用的文件。</p>;
     }
 
     return (
@@ -202,8 +214,8 @@ export const FileTable: React.FC<FileTableProps> = ({ selectedSong, files, isLoa
                                             type="button"
                                             onClick={() => handleDownloadClick(file)}
                                             disabled={!!downloadingUrl}
-                                            aria-label={`Download ${label}`}
-                                            title={`Download ${file.name}`}
+                                            aria-label={`下载 ${label}`}
+                                            title={`下载 ${file.name}`}
                                             className={`${mobile ? 'w-11 h-11 rounded-[10px]' : 'w-9 h-9 rounded-lg'} flex items-center justify-center text-[#22d3ee] hover:bg-[rgba(34,211,238,.12)] transition-colors disabled:cursor-not-allowed ${isDownloadingThis ? '' : 'disabled:opacity-40'}`}
                                         >
                                             {isDownloadingThis ? <Spinner /> : <ArrowDownTrayIcon className={mobile ? 'w-[18px] h-[18px]' : 'w-[17px] h-[17px]'} />}

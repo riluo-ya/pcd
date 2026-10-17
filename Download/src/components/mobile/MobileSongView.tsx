@@ -63,7 +63,7 @@ const DifficultyTiles: React.FC<{
                     const extra = getExtraChart(song.id, diff);
                     const level = song.difficulties?.[key] ?? extra?.level;
                     const charter = song.charters[key];
-                    const tooltip = [extra?.tooltip, settings.advancedInfo && charter ? `Charter: ${charter}` : null].filter(Boolean).join('\n');
+                    const tooltip = [extra?.tooltip, settings.advancedInfo && charter ? `谱师：${charter}` : null].filter(Boolean).join('\n');
                     return (
                         <button
                             key={diff}
@@ -282,7 +282,7 @@ export const MobileSongView: React.FC<MobileSongViewProps> = ({
                         aria-label="导出全部难度"
                         className="relative overflow-hidden flex-none w-[72px] h-[54px] rounded-xl border border-white/[.14] bg-[rgba(9,11,16,.5)] backdrop-blur-[8px] text-slate-200 flex flex-col items-center justify-center gap-px disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        <span className="font-mono text-[13px] font-semibold tracking-[.06em]">ALL</span>
+                        <span className="font-mono text-[13px] font-semibold tracking-[.06em]">全部</span>
                         <span className="text-[10px] leading-none text-slate-400">全部难度</span>
                     </button>
                 )}

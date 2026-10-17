@@ -40,7 +40,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({ audio, color, 
                 sourceMap.set(audio, source);
             }
         } catch (e) {
-            console.error("Failed to initialise audio source:", e);
+            console.error("音频源初始化失败：", e);
             return;
         }
 

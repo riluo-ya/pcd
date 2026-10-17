@@ -4,6 +4,7 @@ import { Spinner } from '../Spinner';
 import { ErrorIcon, MagnifyingGlassIcon, ChevronDownIcon } from '../Icons';
 import { useSettings } from '../../contexts/SettingsContext';
 import { Song, SortConfig } from '../../types';
+import { HOME_URL } from '../../utils/navLinks';
 import { getBlurIllustrationUrl } from '../../utils/resourceUrls';
 import { SongFilter, SORT_CYCLE, getSortIndex } from '../../hooks/useSongFilter';
 
@@ -122,8 +123,16 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
     return (
         <div className="absolute inset-0 flex flex-col bg-[#0d1118]">
             <div className="flex-none bg-[#090c11] border-b border-white/[.1]">
-                <header className="h-[52px] flex items-center justify-between gap-3 pl-[18px] pr-2">
-                    <div className="flex items-center gap-2.5 min-w-0">
+                <header className="h-[52px] flex items-center justify-between gap-3 pl-2 pr-2">
+                    <a
+                        href={HOME_URL}
+                        aria-label="返回导航中心"
+                        title="返回导航中心"
+                        className="w-10 h-10 flex-none flex items-center justify-center rounded-xl text-slate-300 active:bg-white/[.05]"
+                    >
+                        <svg width="21" height="21" fill="none" viewBox="0 0 24 24" strokeWidth={1.7} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
+                    </a>
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
                         <span className="w-4 h-4 flex-none bg-[#22d3ee] -skew-x-[14deg]" aria-hidden="true" />
                         <h1 className="font-semibold text-[13px] tracking-[.16em] text-slate-100 truncate">PHIGROS 谱面下载器</h1>
                     </div>
@@ -145,7 +154,7 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
                             onClick={() => setOnlyHasAt(v => !v)}
                             className={`${chip} gap-1.5 px-3 font-mono text-xs font-semibold ${onlyHasAt ? 'border-[rgba(74,222,128,.35)] bg-[rgba(74,222,128,.12)] text-[#4ade80]' : 'border-white/[.08] text-slate-200'}`}
                         >
-                            Has AT
+                            含 AT
                         </button>
                         <button
                             type="button"
