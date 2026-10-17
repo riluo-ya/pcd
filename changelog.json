@@ -1,11 +1,6 @@
-mkdir -p /data/workspace/pcd/Download/public && cat > /data/workspace/pcd/Download/public/changelog.json <<'JSONEOF'
 {
   "notice": "本项目（PCD）不是Phigros官方项目，与南京鸽游网络有限公司及Phigros官方不存在授权、合作或运营关系！",
   "logs": [
-    {
-      "date": "2026-10-17",
-      "content": "界面与上游项目对齐\n- 整体结构改为全高应用外壳：顶栏 / 左侧曲库 / 右侧工作区 / 底栏，页面不再整体滚动\n- 歌曲列表从下拉改为常驻面板，搜索框常驻顶部，列表项显示曲名与曲师\n- 难度选择改为四格卡片（EZ/HD/IN/AT），缺失难度置灰显示 N/A\n- 顶栏新增版本状态胶囊，加载失败可点击重试\n- 导出按钮、文件表格、滚动条等细节统一为新的视觉规范\n\n下载站\n- 修复分享卡片一直卡在「正在生成」的问题：曲绘加载增加超时，网络挂起时不再无限等待\n- 卡片生成失败时显示原因并提供重试，不再一片空白\n- 错误提示改为站内弹窗，不再调用浏览器原生弹窗\n- 未指定难度时导出全部难度，每个难度一个谱面包\n- 访问凭证有效期延长至 12 小时\n- 扫码进入并完成答题后，会回到原来的歌曲链接而不是导航页\n\n分享卡片\n- 新增「指定定数」筛选，可填 17、17.6 这类精确值，多个用逗号分隔\n- 没有 AT 难度的歌曲不再渲染 AT 行\n- 物量显示改为 Notes，主题增至 17 套并新增浅色主题\n- 卡片内的显示项可在设置中逐项开关\n- 超长曲名自动调整字号与行数，不再被截断\n\n批量下载\n- 界面重做：筛选 → 勾选 → 打包，支持关键词、定数、难度、谱师、曲师、BPM、时长、物量、判定线\n- 打包方式改为每个难度一个独立谱面包\n- 开始前显示数量、包数与预计耗时，命中黑名单时提前确认\n- 结束后可只重试失败的曲目\n\n谱面工坊\n- 适配 Phigros 新增的「噪域」结构，统计区显示噪域数量、遮挡/挖洞构成与跨度\n- 支持直接上传下载站导出的压缩包，自动识别其中的多首歌曲与多个难度\n- 修复导出的文件扩展名错误（.pez 被写成 .json）\n- 谱面信息同步写入 info.txt 与 info.yml\n- 输出文件名改为「曲名 + 标识」，如 ALL TAP、ALL HOLD、RANDOM、MIXTURE\n- 下拉与复选框改为站内自绘控件，配色与整体统一"
-    },
     {
       "date": "2026-10-01",
       "content": "国庆节快乐(🇨🇳^‿^)/🎉\n优化了筛选的逻辑，可以指定难度啦"
@@ -52,14 +47,3 @@ mkdir -p /data/workspace/pcd/Download/public && cat > /data/workspace/pcd/Downlo
     }
   ]
 }
-JSONEOF
-node -e "
-const d=JSON.parse(require('fs').readFileSync('/data/workspace/pcd/Download/public/changelog.json','utf8'));
-console.log('JSON 解析通过');
-console.log('notice:', d.notice.slice(0,20)+'...');
-console.log('条目数:', d.logs.length);
-console.log('最新:', d.logs[0].date, '| 行数:', d.logs[0].content.split('\n').length);
-const bad=d.logs.filter(l=>!l.date||!l.content);
-console.log(bad.length===0?'每条都有 date 与 content':'有缺失字段');
-console.log('日期倒序:', d.logs.every((l,i,a)=>i===0||a[i-1].date>=l.date));
-"
