@@ -1,5 +1,4 @@
 {
-  "notice": "",
   "faqs": [
     {
       "question": "怎么下载能在 Phira 或 RPE 里用的谱面？",
@@ -28,8 +27,22 @@
     {
       "question": "为什么没有愚人节谱面和旧版（Legacy）谱面？",
       "answer": "这类谱面已经有不少专门的获取渠道，比如",
+      "links": [
+        {
+          "text": "Google 云端硬盘文件夹",
+          "url": "https://drive.google.com/drive/folders/1LcJ2Ublu6TNNTqUph61ItzGwJTqG-IQu"
+        },
+        {
+          "text": "123网盘",
+          "url": "https://1812016671.share.123pan.cn/123pan/IBdrVv-qQPXd"
+        },
+        {
+          "text": "光鸭网盘",
+          "url": "https://www.guangyapan.com/s/1958461735220449280_aiK0qIqkk2LK6k-Z"
+        }
+      ],
       "link": {
-        "text": "这个 Google 云端硬盘文件夹",
+        "text": "Google 云端硬盘文件夹",
         "url": "https://drive.google.com/drive/folders/1LcJ2Ublu6TNNTqUph61ItzGwJTqG-IQu"
       }
     }
