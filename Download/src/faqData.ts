@@ -1,11 +1,19 @@
 
+export interface FaqLink {
+  text: string;
+  url: string;
+}
+
 export interface FAQEntry {
   question: string;
   answer: string;
-  // Optional link appended to the end of the answer.
-  link?: { text: string; url: string };
+  // Optional link(s) appended to the end of the answer.
+  // `links` holds every link; `link` is the first one, kept for older parsers.
+  link?: FaqLink;
+  links?: FaqLink[];
 }
 
+// 兜底内容：faq.json 三个源都拉不到时用它。改内容请直接改 public/faq.json。
 export const faqData: FAQEntry[] = [
   {
     question: "怎么下载能在 Phira 或 RPE 里用的谱面？",
@@ -34,6 +42,7 @@ export const faqData: FAQEntry[] = [
   {
     question: "为什么没有愚人节谱面和旧版（Legacy）谱面？",
     answer: "这类谱面已经有不少专门的获取渠道，比如",
+    links: [{ text: '这个 Google 云端硬盘文件夹', url: 'https://drive.google.com/drive/folders/1LcJ2Ublu6TNNTqUph61ItzGwJTqG-IQu' }],
     link: { text: '这个 Google 云端硬盘文件夹', url: 'https://drive.google.com/drive/folders/1LcJ2Ublu6TNNTqUph61ItzGwJTqG-IQu' },
   },
 ];

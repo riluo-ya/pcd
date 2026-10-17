@@ -38,10 +38,37 @@ export const DEFAULT_FAQ_SOURCES: FaqSource[] = [
     { url: 'https://raw.githubusercontent.com/riluo-ya/pcd/main/Download/public/faq.json', label: 'GitHub' },
 ];
 
+/**
+ * 规范化链接地址：去掉首尾空白；没写协议时补 https；
+ * 非 http(s)（如 javascript:、data:）一律判为无效返回空串。
+ */
+export function normalizeUrl(raw: unknown): string {
+    if (typeof raw !== 'string') return '';
+    let u = raw.trim();
+    if (!u) return '';
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = `https://${u}`;
+    return /^https?:\/\//i.test(u) ? u : '';
+}
+
+/** 取域名用于卡片副标题，取不到就退回完整地址 */
+export function linkHost(url: string): string {
+    try {
+        return new URL(url).host.replace(/^www\./, '');
+    } catch (e) {
+        return url;
+    }
+}
+
+interface RawLink {
+    text?: string;
+    url?: string;
+}
+
 interface RawFaq {
     question?: string;
     answer?: string;
-    link?: { text?: string; url?: string };
+    link?: { text?: string; url?: string } | { text?: string; url?: string }[];
+    links?: { text?: string; url?: string }[];
 }
 
 /** 兼容写法：{ faqs: [...] } 或直接是数组 [...] */
@@ -67,11 +94,29 @@ export function normalizeFaqs(data: unknown): FAQEntry[] {
             if (!question || !answer) return null;
 
             const entry: FAQEntry = { question, answer };
-            if (item.link && typeof item.link === 'object') {
-                const text = typeof item.link.text === 'string' ? item.link.text.trim() : '';
-                const url = typeof item.link.url === 'string' ? item.link.url.trim() : '';
-                // 只放行 http(s) 链接，避免 javascript: 之类的注入
-                if (text && /^https?:\/\//i.test(url)) entry.link = { text, url };
+
+            // 链接：links 数组优先，其次单条 link（两者都写时以 links 为准）
+            const rawList: unknown[] | null = Array.isArray(item.links)
+                ? item.links
+                : Array.isArray(item.link)
+                    ? item.link
+                    : item.link && typeof item.link === 'object'
+                        ? [item.link]
+                        : null;
+
+            if (rawList) {
+                const list: { text: string; url: string }[] = [];
+                for (const lk of rawList) {
+                    if (!lk || typeof lk !== 'object') continue;
+                    const text = typeof (lk as RawLink).text === 'string' ? (lk as RawLink).text!.trim() : '';
+                    const url = normalizeUrl((lk as RawLink).url);
+                    // 只放行 http(s) 链接，避免 javascript: 之类的注入
+                    if (text && url) list.push({ text, url });
+                }
+                if (list.length) {
+                    entry.links = list;
+                    entry.link = list[0];
+                }
             }
             return entry;
         })
