@@ -464,6 +464,54 @@ npm run dev       # 端口 3000
 
 ---
 
+### 弹窗与提示
+
+全站使用自绘弹窗，不用 `window.alert` / `window.confirm` —— 浏览器原生弹窗是
+系统控件，跟深色界面完全不搭，手机上还会卡住整个页面。
+
+自绘版本位于 `Download/src/components/ui/Dialog.tsx`，提供：
+
+- `NoticeDialog` —— 信息 / 警告 / 错误三种 tone，顶部一条对应色的细线
+- `ConfirmDialog` —— 确认框（批量下载前的黑名单预检用它）
+- `ErrorBody` —— 正文 + 可折叠的技术细节，取代「请查看控制台」
+- `DialogFrame` / `DialogHeader` / `Eyebrow` / `Button` —— 容器与排版件
+
+错误与警告**不会**因点击遮罩关闭，避免误触丢掉提示；Escape 始终可关。
+
+### 分享卡片的两个已知坑
+
+1. **曲绘加载必须带超时**。
+   `<img>` 只有 `onload` / `onerror`，请求挂起时（加速源不可达但连接未断）
+   两个回调都不触发，Promise 永远 pending，卡片就永远停在「正在生成卡片…」。
+   现在每个源最多等 8 秒，超时即按失败处理，用占位图继续生成。
+2. **生成失败要可见**。
+   渲染异常时以前只是静默回到初始态，界面一片空白。现在会显示原因与重试按钮。
+
+## 界面结构
+
+沿用上游 `swordalt/phigros-chart-downloader` 的应用外壳：
+
+```
+h-dvh flex flex-col               全高应用，不随内容滚动
+├── Header  h-14 / #05070a         倾斜青色标记 + 标题 + 版本胶囊 + 导航
+├── main    grid                   桌面 340px 侧栏 + 工作区；窄屏上下分栏
+│   ├── aside   歌曲列表（常驻面板，非下拉）
+│   └── section 工作区（曲名 / 难度 / 文件 / 导出）
+└── footer  min-h-10 / #05070a
+```
+
+关键约定：
+
+- **歌曲列表是常驻面板**，不是下拉。搜索框 42px 常驻顶部，列表撑满剩余高度并虚拟化。
+- **难度选择是四个卡片槽位**（EZ/HD/IN/AT），缺失的难度置灰显示 `N/A` —— 一眼能看出有没有 AT。
+- **导出主按钮** 52px 青底黑字 + `export-glow` 呼吸光晕；次按钮为描边样式。
+- 版本信息在顶栏胶囊里（绿=已加载 / 黄=加载中 / 红=失败可点重试），不再单独占一块卡片。
+- 列表与弹窗内容区统一用 `.thin-scroll` 细滚动条。
+
+配色走 CSS 变量：`--color-panel: rgba(12,15,22,.97)`、`--color-ink: #090b10`、
+强调色 `#22d3ee`。等宽小标签（`font-mono text-[10px] tracking-[.14em] uppercase`）
+用于分组标题与元信息。
+
 ## 部署
 
 推送到 `main` 分支后，`.github/workflows/deploy.yml` 自动执行：
