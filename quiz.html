@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>答题系统</title>
+    <meta name="pcd-quiz-version" content="2026.10.17b">
     <style>
         :root {
             --primary: #4F46E5;
@@ -44,6 +45,10 @@
         .question-card { background: var(--card-bg); border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: var(--shadow-lg); border: 1px solid rgba(255,255,255,0.6); touch-action: manipulation; }
         .q-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 16px; line-height: 1.5; display: flex; gap: 8px; }
         .q-index { color: var(--primary); font-weight: bold; }
+        /* 题目属性小框：置于题号上方，低调不抢眼 */
+        .src-badge { display: inline-block; font-size: 0.62rem; font-weight: 600; padding: 1px 7px; border-radius: 4px; line-height: 1.7; letter-spacing: .04em; margin-bottom: 10px; }
+        .src-badge.builtin { color: #9aa4b2; background: #f4f6f9; border: 1px solid #e6eaf0; }
+        .src-badge.contribute { color: #a1761f; background: #fdf8ec; border: 1px solid #f0e4c8; }
         .options-grid { display: grid; gap: 12px; }
         .option-item { display: flex; align-items: center; padding: 14px 16px; border: 2px solid var(--border-color); border-radius: 12px; cursor: pointer; transition: all 0.2s ease; background: white; }
         .option-item:hover { border-color: var(--primary); background: #f9fafb; }
@@ -624,7 +629,12 @@
                 } catch (e) {}
             }
 
-            currentQuestions = config.questions.map(q => ({ ...q, renderedOptions: q.renderedOptions }));
+            currentQuestions = config.questions.map(q => ({
+                ...q,
+                // 老缓存里没有 source，这里补齐，保证徽标一定有值可显示
+                source: (q && q.source === 'contribute') ? 'contribute' : 'builtin',
+                renderedOptions: q.renderedOptions,
+            }));
             renderQuestions();
 
             document.getElementById('session-info-bar').style.display = 'flex';
@@ -694,7 +704,12 @@
             currentQuestions.forEach((q, index) => {
                 const card = document.createElement('div');
                 card.className = 'question-card';
-                const titleHtml = `<div class="q-title"><span class="q-index">${String.fromCharCode(65 + index)}.</span> ${escapeHtml(q.title)}</div>`;
+                // 题目属性：source 为 contribute 时显示「投稿」，其余（含老数据）显示「内置」
+                // 无论内置还是投稿都要展示；字段缺失/异常一律按「内置」兜底
+                const srcBadge = (q && q.source === 'contribute')
+                    ? '<span class="src-badge contribute">投稿</span>'
+                    : '<span class="src-badge builtin">内置</span>';
+                const titleHtml = `${srcBadge}<div class="q-title"><span class="q-index">${String.fromCharCode(65 + index)}.</span> <span>${escapeHtml(q.title)}</span></div>`;
                 let optionsHtml = '<div class="options-grid">';
                 q.renderedOptions.forEach((opt, optIndex) => {
                     const letter = String.fromCharCode(65 + optIndex);
