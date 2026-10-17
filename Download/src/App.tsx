@@ -31,7 +31,6 @@ import { getSongEffect } from './song-effects';
 import { SongEffectRenderer } from './components/SongEffectRenderer';
 import { ShareCardPopup } from './components/ShareCardPopup';
 import { SourcePopup } from './components/SourcePopup';
-import { DnsPopup } from './components/DnsPopup';
 import { BulkDownloadPanel } from './components/BulkDownloadPanel';
 import type { FailedFile } from './worker/export.worker';
 
@@ -66,7 +65,6 @@ const App: React.FC = () => {
     const [isFaqOpen, setIsFaqOpen] = useState(false);
     const [isAboutOpen, setIsAboutOpen] = useState(false);
     const [isSourceOpen, setIsSourceOpen] = useState(false);
-    const [isDnsOpen, setIsDnsOpen] = useState(false);
     const [isShareCardOpen, setIsShareCardOpen] = useState(false);
     const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>('export');
     const openSettings = (category: SettingsCategory) => {
@@ -516,7 +514,6 @@ const App: React.FC = () => {
             />
             <ShareCardPopup song={selectedSong} isOpen={isShareCardOpen} onClose={() => setIsShareCardOpen(false)} />
             <SourcePopup isOpen={isSourceOpen} onClose={() => setIsSourceOpen(false)} />
-            <DnsPopup isOpen={isDnsOpen} onClose={() => setIsDnsOpen(false)} />
             {patchedChartPrompt && (
                 <PatchedChartPopup
                     isOpen={!!patchedChartPrompt}
@@ -554,7 +551,6 @@ const App: React.FC = () => {
                     onFaqClick={() => setIsFaqOpen(true)}
                     onSettingsClick={() => openSettings('export')}
                     onSourceClick={() => setIsSourceOpen(true)}
-                    onDnsClick={() => setIsDnsOpen(true)}
                     bgImage={bgImage}
                     isBgLoaded={isBgLoaded}
                     audio={activeAudio}
@@ -601,7 +597,6 @@ const App: React.FC = () => {
                     onFaqClick={() => setIsFaqOpen(true)}
                     onAboutClick={() => setIsAboutOpen(true)}
                     onSourceClick={() => setIsSourceOpen(true)}
-                    onDnsClick={() => setIsDnsOpen(true)}
                 />
 
                 <main className="relative z-10 flex-1 min-h-0 grid grid-rows-[minmax(0,40%)_minmax(0,1fr)] md:grid-rows-1 md:grid-cols-[340px_minmax(0,1fr)]">
@@ -618,7 +613,11 @@ const App: React.FC = () => {
                     </aside>
 
                     <section className="relative min-h-0">
-                        {settings.bulkDownloadMode ? renderBulkPanel() : (
+                        {settings.bulkDownloadMode ? (
+                            <div className="absolute inset-0 overflow-y-auto thin-scroll px-4 py-4">
+                                {renderBulkPanel()}
+                            </div>
+                        ) : (
                             <SongWorkspace
                                 song={selectedSong}
                                 bgImage={bgImage}

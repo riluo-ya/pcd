@@ -60,6 +60,8 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
         duration: null,
     });
     const [loadingNotes, setLoadingNotes] = useState(false);
+    /** 绘制进度：当前步骤文案 + 百分比，长任务时给用户看得见的反馈 */
+    const [progress, setProgress] = useState<{ label: string; percent: number }>({ label: '准备中', percent: 0 });
 
 
     // 只要有一项谱面数据被开启，就需要下载谱面文件解析
@@ -110,31 +112,43 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, song?.id, settings.proxySource]);
 
-    // 生成卡片
-    const build = useCallback(() => {
+    // 生成卡片（分阶段绘制，界面实时显示进度）
+    const buildSeq = useRef(0);
+    const build = useCallback(async () => {
         if (!song || !illuReady) return;
+        const seq = ++buildSeq.current;
         setStatus('building');
+        setProgress({ label: '准备画布', percent: 4 });
         try {
             const theme = CARD_THEMES.find(t => t.id === themeId) || CARD_THEMES[0];
-            const canvas = renderShareCard({
-                song,
-                illustration: illuRef.current,
-                theme,
-                noteCounts: settings.shareCardNoteCounts ? noteCounts : undefined,
-                chartInfo: visibleChartInfo,
-                qrText: `https://pcd.bot.cd/?song=${encodeURIComponent(song.id)}`,
-            });
+            const canvas = await renderShareCard(
+                {
+                    song,
+                    illustration: illuRef.current,
+                    theme,
+                    noteCounts: settings.shareCardNoteCounts ? noteCounts : undefined,
+                    chartInfo: visibleChartInfo,
+                    qrText: `https://pcd.bot.cd/?song=${encodeURIComponent(song.id)}`,
+                },
+                (label, percent) => {
+                    // 只认最后一次构建，避免切换主题时旧进度乱跳
+                    if (seq === buildSeq.current) setProgress({ label, percent });
+                }
+            );
+            if (seq !== buildSeq.current) return;
             canvasRef.current = canvas;
             setDataUrl(canvas.toDataURL('image/png'));
             setStatus('ready');
         } catch (err) {
+            if (seq !== buildSeq.current) return;
             console.error('[shareCard] 生成失败', err);
             setStatus('idle');
         }
     }, [song, illuReady, themeId, noteCounts, chartInfo, settings.shareCardNoteCounts, visibleChartInfo.bpm, visibleChartInfo.judgeLines, visibleChartInfo.duration]);
 
     useEffect(() => {
-        build();
+        void build();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [build]);
 
     // 勾选后异步拉取：各难度物量 + 曲目级 BPM / 判定线 / 时长
@@ -264,13 +278,32 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
                                 style={{ opacity: status === 'building' ? 0.5 : 1, transition: 'opacity .2s' }}
                             />
                         ) : (
-                            <div className="flex items-center justify-center h-64 text-slate-500 text-sm">
-                                正在生成卡片…
+                            <div className="flex flex-col items-center justify-center gap-3 h-64 text-slate-500 text-sm px-6">
+                                <span className="w-7 h-7 rounded-full border-2 border-white/[.12] border-t-[#22d3ee] animate-spin" />
+                                <span className="text-[13px] text-slate-300">{progress.label}</span>
+                                <span className="w-full max-w-[240px] h-1.5 rounded-full bg-white/[.08] overflow-hidden">
+                                    <span
+                                        className="block h-full rounded-full bg-[#22d3ee] transition-[width] duration-200"
+                                        style={{ width: `${progress.percent}%` }}
+                                    />
+                                </span>
+                                <span className="font-mono text-[11px] text-slate-500">{progress.percent}%</span>
                             </div>
                         )}
                         {loadingNotes && (
                             <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-xs text-brand-cyan">
                                 正在读取谱面…
+                            </div>
+                        )}
+                        {!loadingNotes && status === 'building' && dataUrl && (
+                            <div className="absolute inset-x-0 bottom-0 px-3 py-2 bg-slate-950/80 flex items-center gap-2.5">
+                                <span className="w-full h-1 rounded-full bg-white/[.10] overflow-hidden">
+                                    <span
+                                        className="block h-full rounded-full bg-[#22d3ee] transition-[width] duration-200"
+                                        style={{ width: `${progress.percent}%` }}
+                                    />
+                                </span>
+                                <span className="flex-none font-mono text-[10px] text-slate-300">{progress.percent}%</span>
                             </div>
                         )}
                     </div>

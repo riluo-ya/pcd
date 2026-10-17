@@ -9,7 +9,6 @@ interface HeaderProps {
     onFaqClick: () => void;
     onAboutClick: () => void;
     onSourceClick: () => void;
-    onDnsClick: () => void;
 }
 
 const AssetsPill: React.FC<Pick<HeaderProps, 'version' | 'isLoadingVersion' | 'versionError' | 'onRetryVersion'>> = ({ version, isLoadingVersion, versionError, onRetryVersion }) => {
@@ -36,7 +35,7 @@ const AssetsPill: React.FC<Pick<HeaderProps, 'version' | 'isLoadingVersion' | 'v
     return <span className={className} title="曲库资源解包自该游戏版本">{content}</span>;
 };
 
-export const Header: React.FC<HeaderProps> = memo(({ onSettingsClick, onFaqClick, onAboutClick, onSourceClick, onDnsClick, ...versionProps }) => {
+export const Header: React.FC<HeaderProps> = memo(({ onSettingsClick, onFaqClick, onAboutClick, onSourceClick, ...versionProps }) => {
     const navButton = 'px-3 py-1.5 text-[13px] text-slate-400 rounded-md hover:text-white hover:bg-white/[.05] transition-colors flex items-center gap-1.5';
     return (
         <header className="relative z-20 h-14 flex-none flex items-center justify-between gap-4 px-4 sm:px-6 border-b border-white/[.1] bg-[#05070a]">
@@ -52,10 +51,6 @@ export const Header: React.FC<HeaderProps> = memo(({ onSettingsClick, onFaqClick
                 <button type="button" onClick={onSourceClick} className={navButton} title="切换加速源">
                     <svg width="15" height="15" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.998 8.998 0 018.716 5.253M12 3a8.998 8.998 0 00-8.716 5.253m0 0A8.983 8.983 0 003 12c0 2.28.851 4.364 2.253 5.953M20.747 8.253A8.983 8.983 0 0121 12c0 2.28-.851 4.364-2.253 5.953M3.253 17.953A8.998 8.998 0 0012 21m8.747-3.047A8.998 8.998 0 0112 21" /></svg>
                     加速源
-                </button>
-                <button type="button" onClick={onDnsClick} className={navButton} title="公共 DNS 推荐">
-                    <svg width="15" height="15" fill="none" viewBox="0 0 24 24" strokeWidth={1.6} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" /></svg>
-                    DNS
                 </button>
                 <button type="button" onClick={onAboutClick} className={navButton}>关于</button>
                 <button type="button" onClick={onFaqClick} className={navButton}>常见问题</button>

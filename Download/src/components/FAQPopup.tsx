@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { faqData } from '../faqData';
+import { useFaq } from '../utils/faq';
 import { DialogFrame, DialogFooter, DialogHeader, Button } from './ui/Dialog';
 import { ChevronDownIcon } from './Icons';
 
@@ -13,6 +13,8 @@ const REPO_ISSUES_URL = 'https://github.com/swordalt/phigros-chart-downloader/is
 export const FAQPopup: React.FC<FAQPopupProps> = ({ isOpen, onClose }) => {
     // One question open at a time; the first starts open.
     const [openIndex, setOpenIndex] = useState<number>(0);
+    // 问答内容来自外部 faq.json，改完推送即可更新，加载失败自动回退内置版本
+    const { faqs, notice, sourceLabel, loading, error, reload } = useFaq();
 
     if (!isOpen) return null;
 
@@ -21,7 +23,24 @@ export const FAQPopup: React.FC<FAQPopupProps> = ({ isOpen, onClose }) => {
             <DialogHeader id="faq-title" eyebrow="帮助" title="常见问题" onClose={onClose} />
 
             <div className="flex-1 min-h-0 overflow-y-auto thin-scroll px-6 max-md:px-5 pt-2 pb-3 flex flex-col">
-                {faqData.map((item, i) => {
+                {notice && (
+                    <p className="mb-2 px-3 py-2 rounded-lg bg-[rgba(34,211,238,.08)] border border-[rgba(34,211,238,.2)] text-[13px] leading-[1.6] text-slate-300">
+                        {notice}
+                    </p>
+                )}
+                {(error || sourceLabel) && (
+                    <div className="mb-2 flex items-center gap-2 px-1 text-[11px] text-slate-500">
+                        <span>{error || (sourceLabel ? `问答来源：${sourceLabel}` : '')}</span>
+                        <button type="button" onClick={reload} className="font-semibold text-[#22d3ee] hover:text-[#67e8f9]">重新加载</button>
+                    </div>
+                )}
+                {loading && (
+                    <div className="flex items-center justify-center gap-2.5 py-8 text-[13px] text-slate-500">
+                        <span className="w-4 h-4 rounded-full border-2 border-white/[.12] border-t-[#22d3ee] animate-spin" />
+                        正在加载问答…
+                    </div>
+                )}
+                {faqs.map((item, i) => {
                     const isOpenItem = openIndex === i;
                     return (
                         <div key={item.question} className={i ? 'border-t border-white/[.06]' : ''}>
@@ -57,10 +76,11 @@ export const FAQPopup: React.FC<FAQPopupProps> = ({ isOpen, onClose }) => {
 
             <DialogFooter>
                 <span className="text-[13px] text-slate-500">
-                    Still stuck? Open an issue on{' '}
+                    还有疑问？去{' '}
                     <a href={REPO_ISSUES_URL} target="_blank" rel="noreferrer" className="text-[#22d3ee] hover:text-[#67e8f9]">GitHub</a>
+                    {' '}提个 issue
                 </span>
-                <Button variant="outline" size="md" onClick={onClose}>Close</Button>
+                <Button variant="outline" size="md" onClick={onClose}>关闭</Button>
             </DialogFooter>
         </DialogFrame>
     );

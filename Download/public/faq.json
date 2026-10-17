@@ -1,0 +1,37 @@
+{
+  "notice": "",
+  "faqs": [
+    {
+      "question": "怎么下载能在 Phira 或 RPE 里用的谱面？",
+      "answer": "从左侧列表挑一首曲子，选好难度（EZ / HD / IN / AT），然后点「导出谱面」即可。"
+    },
+    {
+      "question": "这些文件能在哪些程序里用？",
+      "answer": "试玩首选 Phira —— 新版本对官方谱面格式的兼容性很好。其他模拟器（如 phi-sim）虽然已停止维护，也照样能用。"
+    },
+    {
+      "question": "PEZ 文件是什么？",
+      "answer": "Phi Edit ZIP，本质上就是个 ZIP 包。多数程序都能识别处理，也可以在设置里把导出扩展名改成 ZIP。"
+    },
+    {
+      "question": "为什么这里没有更新的曲子？",
+      "answer": "本站数据来自第三方 GitHub 仓库，上游没收录的新曲，这里就不会出现。"
+    },
+    {
+      "question": "网站打不开或一直报错怎么办？",
+      "answer": "先确认能访问 GitHub 且没有被限流。隐私类插件也可能拦截 raw.githubusercontent.com 的下载 —— 或者在设置里换一个加速源试试。"
+    },
+    {
+      "question": "为什么访问前要答题？",
+      "answer": "本站设置了答题鉴权，通过后凭证在本浏览器内有效 12 小时，过期重新答题即可。"
+    },
+    {
+      "question": "为什么没有愚人节谱面和旧版（Legacy）谱面？",
+      "answer": "这类谱面已经有不少专门的获取渠道，比如",
+      "link": {
+        "text": "这个 Google 云端硬盘文件夹",
+        "url": "https://drive.google.com/drive/folders/1LcJ2Ublu6TNNTqUph61ItzGwJTqG-IQu"
+      }
+    }
+  ]
+}

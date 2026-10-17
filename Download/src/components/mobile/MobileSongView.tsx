@@ -7,7 +7,7 @@ import { ArrowDownTrayIcon, ChevronDownIcon } from '../Icons';
 import { ExportState } from '../SongWorkspace';
 import { useSettings } from '../../contexts/SettingsContext';
 import { getExtraChart, getExtraCharts } from '../../extraCharts';
-import { DIFFICULTY_ORDER, getDifficultyColor, floorLevel } from '../../utils/difficulty';
+import { DIFFICULTY_ORDER, getDifficultyColor, formatLevel } from '../../utils/difficulty';
 import { getResourceUrl, hasPerDifficultyIllustrations } from '../../utils/resourceUrls';
 import { PhotoIcon } from '../Icons';
 
@@ -80,8 +80,8 @@ const DifficultyTiles: React.FC<{
                             }}
                         >
                             <span className="font-bold text-[13px] tracking-[.08em]" style={{ color: getDifficultyColor(diff) }}>{diff}</span>
-                            <span className={`text-[22px] font-semibold leading-none ${selected ? 'text-white' : 'text-slate-500'}`}>
-                                {available ? floorLevel(level ?? '?') : 'N/A'}
+                            <span className={`text-[20px] font-semibold leading-none ${selected ? 'text-white' : 'text-slate-500'}`}>
+                                {available ? formatLevel(level ?? '?') : 'N/A'}
                             </span>
                         </button>
                     );

@@ -74,7 +74,7 @@ pcd/
         ├── song-aliases.ts     # 曲名别名（搜索用）
         ├── song-effects.ts     # 曲目特效映射
         ├── aboutData.ts        # 关于页内容与更新日志
-        ├── faqData.ts          # 常见问题内容
+        ├── faqData.ts          # 常见问题（内置兜底）
         ├── contexts/
         │   ├── SettingsContext.tsx
         │   └── ResourceErrorContext.tsx   # 资源错误集中上报与重试
@@ -121,7 +121,8 @@ pcd/
         │   ├── bulkFilters.ts   # 筛选逻辑
         │   ├── difficulty.ts    # 难度顺序与配色
         │   ├── qrcode.ts        # 二维码生成
-        │   ├── changelog.ts     # 更新记录
+        │   ├── changelog.ts     # 更新记录（读外部 changelog.json）
+        │   ├── faq.ts           # 常见问题（读外部 faq.json）
         │   ├── clearCache.ts    # 缓存清理
         │   └── shareCard.ts     # 卡片绘制
         └── worker/
@@ -381,6 +382,9 @@ GitHub 有非官方限流（约 5000 次/小时），建议保留 0.5 秒以上�
 卡片上的可选项（BPM / 判定线 / 时长 / 各难度物量）在设置里独立开关，
 全部关闭时无需解析谱面，打开即出图。
 
+绘制分阶段进行（背景 → 品牌条 → 曲绘 → 曲名 → 曲目数据 → 难度条 → 页脚二维码），
+界面实时显示当前步骤与百分比，不必干等。
+
 ### 设置项
 
 | 分类 | 项目 |
@@ -462,6 +466,37 @@ sessionStorage，但**保留**登录凭证、已选加速源与 CDN 版本号，
 
 曲库规模约 320 首。索引数据带缓存版本号，内容文件不加（内容固定，
 加了会白白回源变慢）。
+
+---
+
+---
+
+## 在线内容（改 JSON 即生效）
+
+「关于」的更新日志与「常见问题」都从外部 JSON 读取，改完推送即可更新，
+不用改代码重新构建：
+
+| 文件 | 位置 | 说明 |
+|---|---|---|
+| `changelog.json` | `Download/public/changelog.json` | 更新日志，支持 `notice` 置顶公告 |
+| `faq.json` | `Download/public/faq.json` | 常见问题，支持 `notice` 与 `link` |
+
+两个文件的读取顺序都是：**本站 → jsDelivr CDN → GitHub Raw**，
+前一个失败自动换下一个；全部失败时回退到代码里内置的内容，页面不会空白。
+
+`faq.json` 格式：
+
+```json
+{
+  "notice": "置顶公告，不需要就留空字符串",
+  "faqs": [
+    { "question": "问题", "answer": "答案" },
+    { "question": "问题", "answer": "答案", "link": { "text": "链接文字", "url": "https://..." } }
+  ]
+}
+```
+
+> `link` 只放行 `http(s)` 开头的地址；`answer` 为纯文本，换行请用 `\n`。
 
 ---
 

@@ -18,3 +18,9 @@ export const floorLevel = (level: string): string => {
     const n = parseFloat(level);
     return Number.isFinite(n) ? String(Math.floor(n)) : level;
 };
+
+// 定数统一保留一位小数（"15" → "15.0"，"17.60" → "17.6"）；非数字（如 "?"）原样返回。
+export const formatLevel = (level: string): string => {
+    const n = parseFloat(level);
+    return Number.isFinite(n) ? n.toFixed(1) : level;
+};

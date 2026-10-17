@@ -614,7 +614,7 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
 
                     <div
                         ref={listRef}
-                        className="h-64 overflow-y-auto custom-scrollbar rounded-lg border border-slate-700/60 bg-slate-900/50"
+                        className="h-[min(30rem,45vh)] min-h-[14rem] overflow-y-auto custom-scrollbar rounded-lg border border-slate-700/60 bg-slate-900/50"
                     >
                         {finalSongs.length === 0 ? (
                             <div className="flex items-center justify-center h-full text-sm text-slate-500">

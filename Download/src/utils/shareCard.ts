@@ -685,7 +685,11 @@ function drawPill(
     ctx.textBaseline = 'alphabetic';
 }
 
-export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
+export async function renderShareCard(
+    input: ShareCardInput,
+    /** 分阶段回调，用于在界面上显示「正在画到哪一步」 */
+    onProgress?: (label: string, percent: number) => void
+): Promise<HTMLCanvasElement> {
     const { song, illustration, theme, noteCounts, qrText, chartInfo } = input;
     const siteName = input.siteName ?? 'PCD';
     const siteUrl = input.siteUrl ?? 'pcd.bot.cd';
@@ -697,6 +701,12 @@ export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('无法创建画布');
 
+    /** 让出一帧：界面才有机会把进度画出来，长任务也不至于卡住交互 */
+    const step = async (label: string, percent: number) => {
+        onProgress?.(label, percent);
+        await new Promise<void>(r => requestAnimationFrame(() => setTimeout(r, 0)));
+    };
+
     const W = CARD_WIDTH;
     const H = CARD_HEIGHT;
     const PAD = 72;
@@ -705,6 +715,8 @@ export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
     // 浅色主题自动切换：描边/面板/柔光等硬编码白色在浅底上会看不见
     const LIGHT = isLightColor(theme.bg[1]);
     const ink = (a: number) => (LIGHT ? `rgba(15,23,42,${a})` : `rgba(255,255,255,${a})`);
+
+    await step('绘制背景', 12);
 
     /* ================= 背景 ================= */
     const grad = ctx.createLinearGradient(0, 0, 0, H);
@@ -767,6 +779,8 @@ export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
     // 海报内框
     roundRect(ctx, 26, 26, W - 52, H - 52, 32, undefined, ink(LIGHT ? 0.10 : 0.07), 2);
 
+    await step('绘制顶部品牌条', 24);
+
     /* ================= 顶部品牌条 ================= */
     roundRect(ctx, PAD, 86, 84, 8, 4, theme.accent);
 
@@ -796,6 +810,8 @@ export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
         `500 21px ${FONT_STACK}`
     );
     roundRect(ctx, pillX + 0.5, 88.5, pillW - 1, 45, 22.5, undefined, ink(LIGHT ? 0.14 : 0.16), 1);
+
+    await step('排版主面板', 34);
 
     /* ================= 主面板 ================= */
     const INNER = 40;
@@ -834,6 +850,8 @@ export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
     drawGlassPanel(ctx, PANEL_X, PANEL_Y, contentW, PANEL_H, 36, { light: LIGHT });
 
     /* ---------- 曲绘 ---------- */
+    await step('绘制曲绘', 46);
+
     // 曲绘背后的强调色光晕
     ctx.save();
     roundRectPath(ctx, PANEL_X, PANEL_Y, contentW, PANEL_H, 36);
@@ -902,6 +920,8 @@ export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
     ctx.font = `600 20px ${FONT_STACK}`;
     drawSpacedText(ctx, 'SONG', infoX, artY + 26, 4);
 
+    await step('排版曲名', 58);
+
     // 曲名自适应：字号从 62 逐级下调，行数上限跟着剩余高度走。
     // 长曲名会自动多行 + 缩小，而不是被硬截断成省略号。
     const nameTop = artY + 26;
@@ -948,6 +968,8 @@ export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
     sep.addColorStop(1, 'rgba(255,255,255,0)');
     roundRect(ctx, infoX, sepY, infoW, 3, 1.5, sep);
 
+    await step('绘制曲目数据', 70);
+
     // BPM / 判定线 / 时长：等距排布的一组数据，勾选后才画
     const metaY = sepY + 46;
     const meta = [
@@ -982,6 +1004,8 @@ export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
     ctx.fillText('♪', infoX + infoW, artBottom - 26);
     ctx.restore();
     ctx.textAlign = 'left';
+
+    await step('绘制难度横条', 82);
 
     /* ---------- 难度 / 定数 / 谱师 横条 ---------- */
     const rowW = contentW - INNER * 2;
@@ -1084,6 +1108,8 @@ export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
         ctx.textAlign = 'left';
     });
 
+    await step('绘制页脚与二维码', 93);
+
     /* ================= 底部：站点 + 二维码 ================= */
     const FOOT_Y = PANEL_Y + PANEL_H + FOOT_GAP;
     drawGlassPanel(ctx, PANEL_X, FOOT_Y, contentW, FOOT_H, 30, { light: LIGHT });
@@ -1129,6 +1155,8 @@ export function renderShareCard(input: ShareCardInput): HTMLCanvasElement {
         ctx.fillText('二维码生成失败', qrX + qrBox / 2, qrY + qrBox / 2);
         ctx.textAlign = 'left';
     }
+
+    await step('收尾并输出图片', 100);
 
     return canvas;
 }

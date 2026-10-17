@@ -7,7 +7,7 @@ import { BottomSheet } from './BottomSheet';
 import { useSongFilter } from '../../hooks/useSongFilter';
 import { useSettings } from '../../contexts/SettingsContext';
 import { PROXY_SOURCES } from '../../utils/resourceUrls';
-import { faqData } from '../../faqData';
+import { useFaq } from '../../utils/faq';
 import { AudioVisualizer } from '../AudioVisualizer';
 import { SongEffectRenderer } from '../SongEffectRenderer';
 import { SongEffectType } from '../../song-effects';
@@ -35,7 +35,6 @@ interface MobileLayoutProps {
     onFaqClick: () => void;
     onSettingsClick: () => void;
     onSourceClick: () => void;
-    onDnsClick: () => void;
 
     bgImage: string | null;
     isBgLoaded: boolean;
@@ -78,7 +77,6 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
     onFaqClick,
     onSettingsClick,
     onSourceClick,
-    onDnsClick,
     audio,
     bulkPanel,
     toast,
@@ -144,13 +142,14 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
     const dot = versionError ? '#f87171' : isLoadingVersion ? '#fbbf24' : '#4ade80';
     const versionLabel = versionError ? '加载失败 · 重试' : isLoadingVersion ? '加载中…' : `Phigros ${version}`;
     const proxyLabel = PROXY_SOURCES.find(p => p.id === settings.proxySource)?.label ?? '';
+    // 条目数跟着外部 faq.json 走，加载失败时用内置条数
+    const { faqs } = useFaq();
 
     const menuItems: { label: string; meta: string; onClick: () => void }[] = [
         { label: '关于', meta: '', onClick: () => openDialog(onAboutClick) },
-        { label: '常见问题', meta: String(faqData.length), onClick: () => openDialog(onFaqClick) },
+        { label: '常见问题', meta: String(faqs.length), onClick: () => openDialog(onFaqClick) },
         { label: '设置', meta: proxyLabel, onClick: () => openDialog(onSettingsClick) },
         { label: '加速源', meta: proxyLabel, onClick: () => openDialog(onSourceClick) },
-        { label: 'DNS 推荐', meta: '', onClick: () => openDialog(onDnsClick) },
     ];
 
     const { minInput, setMinInput, maxInput, setMaxInput, difficultyBounds, displayedSongs } = filter;

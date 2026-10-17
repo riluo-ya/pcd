@@ -1,7 +1,7 @@
 import React from 'react';
 import { Song } from '../types';
 import { getExtraChart, getExtraCharts } from '../extraCharts';
-import { DIFFICULTY_ORDER, getDifficultyColor } from '../utils/difficulty';
+import { DIFFICULTY_ORDER, getDifficultyColor, formatLevel } from '../utils/difficulty';
 import { useSettings } from '../contexts/SettingsContext';
 import { FileInfo } from '../types';
 import { estimateExportZipSize, formatEstimate } from '../utils/exportEstimate';
@@ -54,7 +54,7 @@ export const DifficultySelector: React.FC<DifficultySelectorProps> = ({ difficul
                             }}
                         >
                             <span className="font-bold text-[15px] tracking-[.08em]" style={{ color }}>{diff}</span>
-                            <span className={`text-[26px] font-semibold leading-none ${selected ? 'text-white' : 'text-slate-500'}`}>{available ? (level ?? '?') : 'N/A'}</span>
+                            <span className={`text-[26px] font-semibold leading-none ${selected ? 'text-white' : 'text-slate-500'}`}>{available ? formatLevel(level ?? '?') : 'N/A'}</span>
                             {estimate !== null && (
                                 <span className="basis-full mt-1.5 font-mono text-[11px] text-slate-500 text-left" title="导出压缩包大小预估（谱面 + 曲绘 + 音频）">{formatEstimate(estimate)}</span>
                             )}

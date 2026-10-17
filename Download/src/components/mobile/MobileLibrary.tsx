@@ -175,7 +175,7 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
             </div>
 
             {bulkPanel ? (
-                <div className="flex-1 min-h-0">{bulkPanel}</div>
+                <div className="flex-1 min-h-0 overflow-y-auto thin-scroll">{bulkPanel}</div>
             ) : (
                 <>
                     <div ref={parentRef} role="listbox" aria-label="曲目列表" className="flex-1 min-h-0 overflow-y-auto px-2 pt-1.5 pb-6">

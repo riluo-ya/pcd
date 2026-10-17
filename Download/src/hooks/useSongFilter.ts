@@ -24,10 +24,10 @@ const parseDifficulty = (value?: string): number | null => {
 
 // Sort button cycles through these in order.
 export const SORT_CYCLE: { config: SortConfig; label: string }[] = [
-    { config: { type: 'alphanumerical', direction: 'asc' }, label: 'A–Z' },
-    { config: { type: 'alphanumerical', direction: 'desc' }, label: 'Z–A' },
-    { config: { type: 'unsorted', direction: 'asc' }, label: 'Default' },
-    { config: { type: 'unsorted', direction: 'desc' }, label: 'Reverse' },
+    { config: { type: 'alphanumerical', direction: 'asc' }, label: '曲名升序' },
+    { config: { type: 'alphanumerical', direction: 'desc' }, label: '曲名降序' },
+    { config: { type: 'unsorted', direction: 'asc' }, label: '默认顺序' },
+    { config: { type: 'unsorted', direction: 'desc' }, label: '倒序排列' },
 ];
 
 export const getSortIndex = (sortConfig: SortConfig): number =>
