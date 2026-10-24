@@ -229,11 +229,14 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
             />
 
             {!bulkPanel && (
+                // audio 在解构里被单独取出，不会进 songViewProps，必须显式回传，
+                // 否则歌曲页的 audio 恒为 undefined，音频播放器永远渲染不出来
                 <MobileSongView
                     open={songOpen && selectedSong !== null}
                     onBack={goBack}
                     song={selectedSong}
                     {...songViewProps}
+                    audio={audio}
                 />
             )}
 

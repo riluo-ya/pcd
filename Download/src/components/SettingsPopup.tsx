@@ -204,7 +204,7 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({ isOpen, onClose })
             onClick={onClose}
         >
             <div 
-                className={`motion-dialog relative w-full max-w-md mx-auto overflow-hidden rounded-2xl border border-white/[.08] bg-[rgba(12,15,22,.97)] shadow-[0_40px_120px_rgba(0,0,0,.6)] text-left transform transition-all max-md:w-full max-md:max-w-none max-md:h-[calc(100dvh-10px)] max-md:max-h-none max-md:rounded-b-none max-md:border-b-0 ${
+                className={`motion-dialog relative w-full max-w-md mx-auto overflow-hidden rounded-2xl border border-white/[.08] bg-[rgba(12,15,22,.97)] shadow-[0_40px_120px_rgba(0,0,0,.6)] text-left transform transition-all max-md:w-full max-md:max-w-none h-dialog-panel max-md:rounded-b-none max-md:border-b-0 ${
                     settings.useNewUi ? 'backdrop-blur-md' : ''
                 }`}
                 onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
@@ -231,7 +231,7 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({ isOpen, onClose })
                     </button>
                 </div>
 
-                <div className="space-y-6 p-6 max-md:p-5 overflow-y-auto max-h-[60vh] max-md:max-h-none flex-1 pr-2 custom-scrollbar">
+                <div className="space-y-6 p-6 max-md:p-5 overflow-y-auto max-h-[60vh] max-md:max-h-none flex-1 min-h-0 pr-2 custom-scrollbar">
                     {/* General Settings */}
                     <div className="flex items-center justify-between">
                         <div>

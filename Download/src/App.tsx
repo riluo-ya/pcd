@@ -332,7 +332,7 @@ const App: React.FC = () => {
     const isExporting = exportState.type !== null;
 
     return (
-        <div className="relative h-dvh flex flex-col antialiased font-saira text-slate-200 bg-[#090b10] overflow-hidden">
+        <div className="relative h-app-shell flex flex-col antialiased font-saira text-slate-200 bg-[#090b10] overflow-hidden">
             {/* New UI Background Layer - Fixed Z-0 */}
             <div 
                 className="fixed top-0 left-0 w-full h-[100lvh] z-0 pointer-events-none"
@@ -470,7 +470,7 @@ const App: React.FC = () => {
                                 />
                         </aside>
 
-                        <section className="relative min-h-0">
+                        <section className="relative min-h-0 overflow-y-auto custom-scrollbar">
                             {/* 批量下载模式：把面板铺满右侧工作区 */}
                             {settings.bulkDownloadMode ? (
                                 <BulkDownloadPanel

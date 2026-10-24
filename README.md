@@ -436,6 +436,22 @@ GitHub 有非官方限流（约 5000 次/小时），建议保留 0.5 秒以上�
 - 地址可省略协议（自动补 `https://`），`javascript:` / `data:` 等非 http(s) 协议会被丢弃
 - 答案支持换行与安全的排版 HTML，`<script>`、`onerror=` 等一律转义
 
+### 移动端高度单位兼容（`dvh`）
+
+页面外壳与弹窗用整屏高度。这里没有直接写 `dvh`，而是用 `index.css` 里的三个兼容类：
+
+| 类 | 用途 |
+|---|---|
+| `.h-app-shell` | 页面外壳（`100vh` 打底，`100dvh` 覆盖） |
+| `.h-dialog-panel` | 手机端整屏弹窗（`calc(100vh - 10px)` / `calc(100dvh - 10px)`） |
+| `.max-h-sheet` | 底部抽屉（`86vh` / `86dvh`） |
+
+iOS Safari 15.4 以下、旧版 Android WebView 和部分 App 内置浏览器不认识 `dvh`，
+**整条 `height` 声明会被丢弃**（不是取近似值）。配合外层的 `overflow-hidden`，
+表现就是「只看到一截、怎么滑都滑不动」——很容易被误判成滚动或布局 bug。
+
+改成新增单位后，如果哪天又直接写回 `dvh`，Tailwind 只扫描源码里出现过的类，
+旧类名的样式不会被生成，测试里对高度的断言会立刻失败。
 ### 加速源
 
 可在界面切换 5 个源：GitHub 直连、jsDelivr CDN、gcore CDN、

@@ -264,7 +264,7 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
                     </p>
                 </div>
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar px-5 py-4">
+                <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-5 py-4">
                     {/* 主题选择 */}
                     <div className="mb-3">
                         <div className="flex items-center justify-between mb-2">

@@ -29,6 +29,18 @@ jobs:
           # 根目录下的静态页、加密数据、域名与说明
           cp -v ../*.html ../*.data ../CNAME ../README.md ./dist/
 
+          # 站点运行时要读的 JSON（更新日志、常见问题）。
+          # Vite 本来会把 public/ 复制进 dist，这里再显式拷一次：
+          # 万一 build 的 publicDir 配置变了，这两个文件丢了会静默回退到内置数据，
+          # 页面上完全看不出异常 —— 只有对比内容才发现线上没生效。
+          for f in changelog.json faq.json; do
+            if [ -f "./public/$f" ]; then
+              cp -v "./public/$f" "./dist/$f"
+            else
+              echo "警告：缺少 public/$f，线上会回退到内置数据"
+            fi
+          done
+
           # 子目录资源：上面的通配符只匹配文件，带不走目录，必须逐个复制。
           # signal/ = SIGNAL 演出工具（第三方二改）；jpg/ = 导航卡片配图。
           # 目录不存在时跳过，不会让构建失败。

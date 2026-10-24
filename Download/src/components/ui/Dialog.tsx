@@ -24,8 +24,8 @@ const EYEBROW_COLOR: Record<Tone, string> = {
 };
 
 const MOBILE_PANEL: Record<'sheet' | 'panel', string> = {
-    sheet: 'max-md:w-full max-md:max-w-none max-md:max-h-[86dvh] max-md:rounded-b-none max-md:rounded-t-[22px] max-md:border-b-0',
-    panel: 'max-md:w-full max-md:max-w-none max-md:h-[calc(100dvh-10px)] max-md:max-h-none max-md:rounded-b-none max-md:border-b-0',
+    sheet: 'max-md:w-full max-md:max-w-none max-h-sheet max-md:rounded-b-none max-md:rounded-t-[22px] max-md:border-b-0',
+    panel: 'max-md:w-full max-md:max-w-none h-dialog-panel max-md:rounded-b-none max-md:border-b-0',
 };
 
 interface DialogFrameProps {

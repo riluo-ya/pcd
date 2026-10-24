@@ -125,6 +125,27 @@
   animation: shake 0.2s ease-in-out 0s 2;
 }
 
+/* ===== dvh 兼容兜底 =====
+   iOS Safari 15.4 以下、旧版 Android WebView、部分 App 内置浏览器不认识 dvh，
+   整条 height / max-height 声明会被丢弃。配合外层的 overflow-hidden，
+   内容会被裁掉且滚不动 —— 表现就是「只看到一截、滑不下去」。
+   这里用 vh 打底、dvh 覆盖：支持的浏览器取更准的 dvh，不支持的自动用 vh。 */
+.h-app-shell {
+  height: 100vh;
+  height: 100dvh;
+}
+
+@media (max-width: 767.98px) {
+  .h-dialog-panel {
+    height: calc(100vh - 10px);
+    height: calc(100dvh - 10px);
+  }
+  .max-h-sheet {
+    max-height: 86vh;
+    max-height: 86dvh;
+  }
+}
+
 .custom-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgb(71 85 105) transparent;

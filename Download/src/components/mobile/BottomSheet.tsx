@@ -36,7 +36,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ open, onClose, labelle
                 aria-hidden={!open}
                 aria-labelledby={labelledBy}
                 aria-label={title}
-                className={`fixed left-0 right-0 bottom-0 z-40 max-h-[86dvh] flex flex-col rounded-t-[22px] border border-b-0 border-white/[.08] bg-[rgba(12,15,22,.98)] shadow-[0_-30px_80px_rgba(0,0,0,.5)] overflow-hidden transition-[transform,visibility] duration-[320ms] ease-[cubic-bezier(.16,1,.3,1)] ${open ? 'translate-y-0 visible' : 'translate-y-[105%] invisible'}`}
+                className={`fixed left-0 right-0 bottom-0 z-40 max-h-sheet flex flex-col rounded-t-[22px] border border-b-0 border-white/[.08] bg-[rgba(12,15,22,.98)] shadow-[0_-30px_80px_rgba(0,0,0,.5)] overflow-hidden transition-[transform,visibility] duration-[320ms] ease-[cubic-bezier(.16,1,.3,1)] ${open ? 'translate-y-0 visible' : 'translate-y-[105%] invisible'}`}
             >
                 <div
                     className="dialog-topline"

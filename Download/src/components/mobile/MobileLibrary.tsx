@@ -190,7 +190,7 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
             </div>
 
             {bulkPanel ? (
-                <div className="flex-1 min-h-0">{bulkPanel}</div>
+                <div className="flex-1 min-h-0 overflow-y-auto thin-scroll">{bulkPanel}</div>
             ) : (
                 <>
                     <div

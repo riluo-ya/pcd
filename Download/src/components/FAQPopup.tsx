@@ -74,7 +74,7 @@ export const FAQPopup: React.FC<FAQPopupProps> = ({ isOpen, onClose }) => {
             onClick={onClose}
         >
             <div 
-                className={`motion-dialog relative w-full max-w-2xl mx-auto overflow-hidden rounded-2xl border border-white/[.08] bg-[rgba(12,15,22,.97)] shadow-[0_40px_120px_rgba(0,0,0,.6)] transform transition-all flex flex-col max-md:w-full max-md:max-w-none max-md:h-[calc(100dvh-10px)] max-md:max-h-none max-md:rounded-b-none max-md:border-b-0 ${settings.useNewUi ? 'backdrop-blur-md' : ''}`}
+                className={`motion-dialog relative w-full max-w-2xl mx-auto overflow-hidden rounded-2xl border border-white/[.08] bg-[rgba(12,15,22,.97)] shadow-[0_40px_120px_rgba(0,0,0,.6)] transform transition-all flex flex-col max-md:w-full max-md:max-w-none h-dialog-panel max-md:rounded-b-none max-md:border-b-0 ${settings.useNewUi ? 'backdrop-blur-md' : ''}`}
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="dialog-topline" style={{ background: 'linear-gradient(90deg, transparent, rgba(34,211,238,.7), transparent)' }} />
@@ -114,7 +114,7 @@ export const FAQPopup: React.FC<FAQPopupProps> = ({ isOpen, onClose }) => {
 
                 <div
                     ref={parentRef}
-                    className="max-h-[60vh] overflow-y-auto px-6 custom-scrollbar"
+                    className="flex-1 min-h-0 max-h-[60vh] max-md:max-h-none overflow-y-auto px-6 custom-scrollbar"
                 >
                     <div
                         style={{
