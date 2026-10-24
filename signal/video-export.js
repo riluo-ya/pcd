@@ -7,6 +7,20 @@ import { previewIssue } from './editor-data.js';
 import { buildMp4, AAC_FRAME_SAMPLES } from './mp4-muxer.js';
 
 const MAX_FRAMES = 5000;
+
+/**
+ * 让出主线程但不受后台节流影响。
+ * requestAnimationFrame 在标签页不可见时会被节流甚至完全暂停 —— 导出动辄几百帧，
+ * 用户一切走就卡住。setTimeout 在后台同样被限制到 ≥1s。
+ * MessageChannel 走的是宏任务队列，没有这两层限制。
+ */
+function yieldToUi() {
+  return new Promise(resolve => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => { channel.port1.close(); resolve(); };
+    channel.port2.postMessage(0);
+  });
+}
 /** 从宽泛到严格依次尝试，硬件编码器不一定支持 High profile */
 const VIDEO_CODECS = ['avc1.4d0028', 'avc1.640028', 'avc1.420028'];
 const AUDIO_CODEC = 'mp4a.40.2';
@@ -189,7 +203,7 @@ export async function exportVideo({
       encoder.encode(frame, { keyFrame: index % fps === 0 });
       frame.close();
       onProgress(index + 1, frameCount, time);
-      await new Promise(resolve => requestAnimationFrame(() => resolve()));
+      await yieldToUi();
     }
     onStage('正在收尾视频…');
     await encoder.flush();
@@ -199,7 +213,10 @@ export async function exportVideo({
     let audio = null;
     if (withAudio) {
       onStage('正在编码音频…');
-      audio = await encodeAudio({ start, end, onStage });
+      // 画面实际编码了多少帧就配多长的声音；画面因故少了几帧时，
+      // 音频多出来的尾部会让「画面播完声音还在响」，所以按画面长度封顶。
+      const videoSeconds = videoSamples.length / fps;
+      audio = await encodeAudio({ start, end: Math.min(end, start + videoSeconds), onStage });
       if (!audio) onStage('音轨在所选区间内没有内容，已导出无声视频。');
     }
 
