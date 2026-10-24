@@ -332,7 +332,7 @@ const App: React.FC = () => {
     const isExporting = exportState.type !== null;
 
     return (
-        <div className="relative h-dvh flex flex-col antialiased font-saira overflow-hidden text-slate-200 bg-[#090b10]">
+        <div className="relative min-h-dvh md:h-dvh flex flex-col antialiased font-saira md:overflow-hidden text-slate-200 bg-[#090b10]">
             {/* New UI Background Layer - Fixed Z-0 */}
             <div 
                 className="fixed top-0 left-0 w-full h-[100lvh] z-0 pointer-events-none"
@@ -394,7 +394,7 @@ const App: React.FC = () => {
             )}
             
             {/* Content Layer - Relative Z-10 */}
-            <div className={`relative z-10 flex-1 min-h-0 flex flex-col ${activeEffect === 'glitch' ? 'effect-glitch-active' : ''} ${activeEffect === 'cracking' ? 'effect-cracking-active' : ''}`}>
+            <div className={`relative z-10 flex-1 md:min-h-0 flex flex-col ${activeEffect === 'glitch' ? 'effect-glitch-active' : ''} ${activeEffect === 'cracking' ? 'effect-cracking-active' : ''}`}>
                  {/* Standard background decorative shape, only visible if New UI bg isn't loaded */}
                  <div 
                      className={`absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80 transition-opacity duration-500 ${!isBgLoaded ? 'opacity-100' : 'opacity-0'}`} 
@@ -419,9 +419,9 @@ const App: React.FC = () => {
                     onSourceClick={() => setIsSourceOpen(true)}
                 />
 
-                <main className="flex-1 min-h-0 grid grid-rows-1 md:grid-cols-[340px_minmax(0,1fr)]">
+                <main className="flex-1 md:min-h-0 flex flex-col md:grid md:grid-cols-[340px_minmax(0,1fr)]">
                     {/* 窄屏：列表与详情二选一，各占满一屏；宽屏（md+）始终并排显示 */}
-                    <aside className={`min-h-0 md:border-r border-white/[.06] ${mobileView === 'detail' ? 'hidden md:block' : 'block'}`}>
+                    <aside className={`md:min-h-0 md:border-r border-white/[.06] ${mobileView === 'detail' ? 'hidden md:block' : 'block'}`}>
                         <SongSelector 
                                 isLoading={isLoadingSongs}
                                 error={errorSongs}
@@ -433,7 +433,7 @@ const App: React.FC = () => {
                             />
                     </aside>
 
-                    <section className={`relative min-h-0 h-full overflow-y-auto thin-scroll ${mobileView === 'list' ? 'hidden md:block' : 'block'}`}>
+                    <section className={`relative md:min-h-0 md:h-full md:overflow-y-auto thin-scroll ${mobileView === 'list' ? 'hidden md:block' : 'block'}`}>
                         {/* 窄屏返回列表：宽屏两侧并排，不需要这个按钮 */}
                         <button
                             type="button"
@@ -512,13 +512,13 @@ const App: React.FC = () => {
                                                 selectedSong={selectedSong}
                                                 highlight={false}
                                             />
-                                        <div className="flex flex-wrap items-center gap-2.5">
+                                        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2.5">
                                             <button
                                                 type="button"
                                                 onClick={handleExportChart}
                                                 disabled={isExporting}
                                                 aria-live="polite"
-                                                className={`export-glow relative overflow-hidden min-w-[220px] h-[52px] rounded-[10px] bg-[#22d3ee] hover:bg-[#67e8f9] text-[#06141a] flex items-center justify-center gap-2.5 font-bold text-[15px] tracking-[.04em] transition-colors disabled:cursor-not-allowed disabled:bg-[#22d3ee]/40`}
+                                                className={`export-glow relative overflow-hidden w-full sm:w-auto sm:min-w-[220px] h-[52px] rounded-[10px] bg-[#22d3ee] hover:bg-[#67e8f9] text-[#06141a] flex items-center justify-center gap-2.5 font-bold text-[15px] tracking-[.04em] transition-colors disabled:cursor-not-allowed disabled:bg-[#22d3ee]/40`}
                                             >
                                                 {exportState.type === 'chart' ? (
                                                     <>
@@ -542,7 +542,7 @@ const App: React.FC = () => {
                                                 onClick={handleExportAllAssets}
                                                 disabled={!selectedSong || isExporting || files.length === 0}
                                                 aria-live="polite"
-                                                className="relative overflow-hidden h-[52px] px-5 rounded-[10px] border border-white/[.12] text-slate-200 flex items-center justify-center gap-2.5 font-semibold text-sm backdrop-blur-sm hover:bg-white/[.04] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="relative overflow-hidden w-full sm:w-auto h-[52px] px-5 rounded-[10px] border border-white/[.12] text-slate-200 flex items-center justify-center gap-2.5 font-semibold text-sm backdrop-blur-sm hover:bg-white/[.04] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 {exportState.type === 'phira' ? (
                                                     <>

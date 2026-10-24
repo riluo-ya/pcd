@@ -257,6 +257,7 @@ export const FileTable: React.FC<FileTableProps> = ({ selectedSong, onFilesFound
         if (files.length > 0) {
             return (
                 <div className="flex flex-col rounded-xl border border-white/[.07] bg-white/[.02] overflow-hidden backdrop-blur-sm">
+                    <div className="overflow-x-auto thin-scroll">
                     <table className="min-w-full text-sm text-left text-slate-300">
                         <thead>
                             <tr className="border-b border-white/[.06]">
@@ -310,6 +311,7 @@ export const FileTable: React.FC<FileTableProps> = ({ selectedSong, onFilesFound
                             )})}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             );
         }

@@ -511,7 +511,7 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
                 )}
             </div>
 
-            <ul ref={parentRef} className="flex-1 min-h-0 overflow-y-auto thin-scroll px-2 py-2 relative" role="listbox">
+            <ul ref={parentRef} className="h-[62vh] md:h-auto md:flex-1 md:min-h-0 overflow-y-auto thin-scroll px-2 py-2 relative" role="listbox">
                             {displayedSongs.length > 0 ? (
                                 <div
                                     style={{
