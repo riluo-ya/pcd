@@ -232,13 +232,30 @@ function stbl({ entry, deltas, sizes, keyframes, offsets }) {
  * @returns {Blob}
  */
 export function buildMp4({ video, audio }) {
-  const hasAudio = !!(audio && audio.samples.length);
+  if (!video || !video.samples || !video.samples.length) {
+    throw new Error('没有视频帧，无法封装 MP4。');
+  }
   const movieTimescale = video.frameRate;
 
   const videoSamples = video.samples.map(s => ({ track: 0, data: s.data, isKey: !!s.isKey, delta: 1 }));
-  const audioSamples = hasAudio
+  const videoDurationUs = videoSamples.length * 1e6 / video.frameRate;
+  // 以视频为主时间轴：音频多出来的尾部一律裁掉。
+  // 否则音频比画面长时，画面播完声音还在响，观感就是「声音在画面之后才出现」。
+  let audioSamples = (audio && audio.samples && audio.samples.length)
     ? audio.samples.map(s => ({ track: 1, data: s.data, delta: s.duration || AAC_FRAME_SAMPLES }))
     : [];
+
+  if (audioSamples.length) {
+    const kept = [];
+    let accUs = 0;
+    for (const s of audioSamples) {
+      if (accUs >= videoDurationUs) break;
+      accUs += s.delta * 1e6 / audio.sampleRate;
+      kept.push(s);
+    }
+    audioSamples = kept;
+  }
+  const hasAudio = audioSamples.length > 0;
 
   // 音视频交错：按各自时长换算到微秒排序，避免音频全堆在文件末尾导致播放器缓冲吃力
   const totalVideo = videoSamples.length;
@@ -261,11 +278,8 @@ export function buildMp4({ video, audio }) {
 
   const videoDuration = totalVideo;
   const audioTotalSamples = audioSamples.reduce((n, s) => n + s.delta, 0);
-  const mediaDurationUs = Math.max(
-    totalVideo * 1e6 / movieTimescale,
-    hasAudio ? audioTotalSamples * 1e6 / audio.sampleRate : 0
-  );
-  const movieDuration = Math.round(mediaDurationUs * movieTimescale / 1e6);
+  // 总时长以视频为准（画面是主体），音频已被裁到不超过它
+  const movieDuration = videoDuration;
 
   const trackOf = t => {
     const samples = ordered.filter(s => s.track === t);
@@ -285,7 +299,8 @@ export function buildMp4({ video, audio }) {
     const aOffsets = hasAudio ? offsets.filter((_, i) => ordered[i].track === 1) : [];
 
     const vTrak = box('trak',
-      tkhd(1, movieDuration, video.width, video.height, false),
+      // 视频 media timescale 与 movie timescale 相同，duration 可直接用
+      tkhd(1, videoDuration, video.width, video.height, false),
       box('mdia',
         mdhd(movieTimescale, videoDuration),
         hdlr('vide'),
@@ -305,7 +320,7 @@ export function buildMp4({ video, audio }) {
 
     const aDurationInMovie = Math.round(audioTotalSamples * movieTimescale / audio.sampleRate);
     const aTrak = box('trak',
-      tkhd(2, movieDuration || aDurationInMovie, 0, 0, true),
+      tkhd(2, aDurationInMovie, 0, 0, true),
       box('mdia',
         mdhd(audio.sampleRate, audioTotalSamples),
         hdlr('soun'),
