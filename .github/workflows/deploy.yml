@@ -25,7 +25,25 @@ jobs:
       - name: Copy static assets into dist
         run: |
           mkdir -p ./dist
+
+          # 根目录下的静态页、加密数据、域名与说明
           cp -v ../*.html ../*.data ../CNAME ../README.md ./dist/
+
+          # 子目录资源：上面的通配符只匹配文件，带不走目录，必须逐个复制。
+          # signal/ = SIGNAL 演出工具（第三方二改）；jpg/ = 导航卡片配图。
+          # 目录不存在时跳过，不会让构建失败。
+          for d in signal jpg; do
+            if [ -d "../$d" ]; then
+              mkdir -p "./dist/$d"
+              cp -R "../$d/." "./dist/$d/"
+              echo "已复制 $d/：$(find "./dist/$d" -type f | wc -l) 个文件"
+            else
+              echo "未找到 $d/，跳过"
+            fi
+          done
+
+          echo "--- dist 内容 ---"
+          ls -la ./dist
         working-directory: ./Download
 
       - name: Deploy to GitHub Pages

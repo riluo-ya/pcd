@@ -45,6 +45,8 @@ const App: React.FC = () => {
     const [isAboutOpen, setIsAboutOpen] = useState(false);
     const [isSourceOpen, setIsSourceOpen] = useState(false);
     const [isShareCardOpen, setIsShareCardOpen] = useState(false);
+    // 窄屏下一次只显示一栏：'list' 选歌 / 'detail' 详情。宽屏（md+）左右分栏，忽略此状态。
+    const [mobileView, setMobileView] = useState<'list' | 'detail'>('list');
     
 
     // Background and Audio management
@@ -120,6 +122,7 @@ const App: React.FC = () => {
         setSelectedDifficulty(null);
         setAvailableDifficulties([]);
         setFiles([]);
+        if (song) setMobileView('detail');
     }, []);
     
     useEffect(() => {
@@ -136,6 +139,11 @@ const App: React.FC = () => {
             }
         }
     }, [songs, handleSongSelect]);
+
+    // 窄屏：打开批量下载时把视图切到详情区，否则面板被列表挡着看不见
+    useEffect(() => {
+        if (settings.bulkDownloadMode) setMobileView('detail');
+    }, [settings.bulkDownloadMode]);
 
     // Enhanced New UI with preloading and audio state
     useEffect(() => {
@@ -411,8 +419,9 @@ const App: React.FC = () => {
                     onSourceClick={() => setIsSourceOpen(true)}
                 />
 
-                <main className="flex-1 min-h-0 grid grid-rows-[minmax(0,42%)_minmax(0,1fr)] md:grid-rows-1 md:grid-cols-[340px_minmax(0,1fr)]">
-                    <aside className="min-h-0 border-b md:border-b-0 md:border-r border-white/[.06]">
+                <main className="flex-1 min-h-0 grid grid-rows-1 md:grid-cols-[340px_minmax(0,1fr)]">
+                    {/* 窄屏：列表与详情二选一，各占满一屏；宽屏（md+）始终并排显示 */}
+                    <aside className={`min-h-0 md:border-r border-white/[.06] ${mobileView === 'detail' ? 'hidden md:block' : 'block'}`}>
                         <SongSelector 
                                 isLoading={isLoadingSongs}
                                 error={errorSongs}
@@ -424,14 +433,27 @@ const App: React.FC = () => {
                             />
                     </aside>
 
-                    <section className="relative min-h-0 h-full overflow-y-auto thin-scroll">
+                    <section className={`relative min-h-0 h-full overflow-y-auto thin-scroll ${mobileView === 'list' ? 'hidden md:block' : 'block'}`}>
+                        {/* 窄屏返回列表：宽屏两侧并排，不需要这个按钮 */}
+                        <button
+                            type="button"
+                            onClick={() => setMobileView('list')}
+                            className="md:hidden sticky top-0 z-30 w-full flex items-center gap-1.5 px-4 py-2.5 bg-[#0d1118]/95 backdrop-blur-sm border-b border-white/[.06] text-sm text-slate-300 active:bg-white/[.06]"
+                        >
+                            <span aria-hidden="true">←</span>
+                            <span>返回歌曲列表</span>
+                        </button>
+
                         {/* 批量下载模式：把面板铺满右侧工作区 */}
                         {settings.bulkDownloadMode ? (
                             <BulkDownloadPanel
                                 songs={sortedSongs}
                                 isLoading={isLoadingSongs}
                                 error={errorSongs}
-                                onExit={() => setSettings(prev => ({ ...prev, bulkDownloadMode: false }))}
+                                onExit={() => {
+                                setSettings(prev => ({ ...prev, bulkDownloadMode: false }));
+                                setMobileView('list');
+                            }}
                             />
                         ) : (
                             <div className="min-h-full flex flex-col gap-6 px-5 sm:px-8 py-6">
