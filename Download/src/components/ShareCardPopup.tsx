@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Song } from '../types';
-import { getResourceUrl, ProxySource } from '../utils/resourceUrls';
+import { ghRaw } from '../utils/sources';
 import { useSettings } from '../contexts/SettingsContext';
-import { DialogFrame, DialogHeader, DialogFooter, Button } from './ui/Dialog';
 import { ChartStats, fetchChartStats, primaryDifficulty } from '../utils/chartStats';
+import { NoticeDialog, Button } from './ui/Dialog';
 import {
     CARD_THEMES,
     CardThemeId,
@@ -22,14 +22,33 @@ interface ShareCardPopupProps {
 
 const DIFFS = ['EZ', 'HD', 'IN', 'AT'] as const;
 
-/** 尝试加载一张跨域图片，成功返回 Image，失败返回 null */
-function loadImage(url: string): Promise<HTMLImageElement | null> {
+/**
+ * 尝试加载一张跨域图片，成功返回 Image，失败或超时返回 null。
+ *
+ * 超时是必须的：<img> 只有 onload / onerror 两个回调，请求挂起时
+ * （加速源不可达但连接未断、DNS 卡住等）两个都不会触发，Promise 永远 pending，
+ * 于是曲绘永远"加载中"，卡片就一直停在「正在生成卡片…」。
+ * 给一个上限，超时即视为失败 —— 卡片会用占位图继续生成，不会卡死。
+ */
+function loadImage(url: string, timeoutMs = 8000): Promise<HTMLImageElement | null> {
     return new Promise(resolve => {
         const img = new Image();
         // 必须在 src 之前设置，否则跨域图会污染画布导致无法导出
         img.crossOrigin = 'anonymous';
-        img.onload = () => resolve(img);
-        img.onerror = () => resolve(null);
+        let settled = false;
+        const done = (v: HTMLImageElement | null) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(v);
+        };
+        const timer = setTimeout(() => {
+            // 中断仍在等待的请求，避免占着连接
+            img.src = '';
+            done(null);
+        }, timeoutMs);
+        img.onload = () => done(img);
+        img.onerror = () => done(null);
         img.src = url;
     });
 }
@@ -39,12 +58,12 @@ function loadImage(url: string): Promise<HTMLImageElement | null> {
  * 直连域名稳定返回 CORS 头，能显著提高卡片拿到曲绘的成功率；
  * 两次都失败时返回 null，卡片会画占位图，不影响生成。
  */
-async function loadIllustration(songId: string, proxySource: ProxySource): Promise<HTMLImageElement | null> {
-    // 先用当前加速源，失败再退回 GitHub 直连。
-    // 直连域名稳定返回 CORS 头，能显著提高卡片拿到曲绘的成功率。
-    const viaSource = await loadImage(getResourceUrl(proxySource, 'illustration', `${songId}.png`));
+async function loadIllustration(songId: string): Promise<HTMLImageElement | null> {
+    const path = `7aGiven/Phigros_Resource/refs/heads/illustration/${songId}.png`;
+    // 每个源最多等 8 秒：最坏情况 16 秒后必定出结果，不会再无限等待
+    const viaSource = await loadImage(ghRaw(path));
     if (viaSource) return viaSource;
-    return await loadImage(getResourceUrl('github', 'illustration', `${songId}.png`));
+    return await loadImage(`https://raw.githubusercontent.com/${path}`);
 }
 
 export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, onClose }) => {
@@ -60,8 +79,8 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
         duration: null,
     });
     const [loadingNotes, setLoadingNotes] = useState(false);
-    /** 绘制进度：当前步骤文案 + 百分比，长任务时给用户看得见的反馈 */
-    const [progress, setProgress] = useState<{ label: string; percent: number }>({ label: '准备中', percent: 0 });
+    const [buildError, setBuildError] = useState<string | null>(null);
+    const [copyNotice, setCopyNotice] = useState(false);
 
 
     // 只要有一项谱面数据被开启，就需要下载谱面文件解析
@@ -96,11 +115,12 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
         setStatus('building');
         setIlluReady(false);
         setDataUrl(null);
+        setBuildError(null);
         setNoteCounts({});
         setChartInfo({ bpm: null, judgeLines: null, duration: null });
 
 
-        loadIllustration(song.id, settings.proxySource).then(img => {
+        loadIllustration(song.id).then(img => {
             if (cancelled || !aliveRef.current) return;
             illuRef.current = img;
             setIlluReady(true); // 失败时为 null，卡片会画占位图
@@ -109,46 +129,37 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
         return () => {
             cancelled = true;
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen, song?.id, settings.proxySource]);
+    }, [isOpen, song?.id]);
 
-    // 生成卡片（分阶段绘制，界面实时显示进度）
-    const buildSeq = useRef(0);
-    const build = useCallback(async () => {
+    // 生成卡片
+    const build = useCallback(() => {
         if (!song || !illuReady) return;
-        const seq = ++buildSeq.current;
         setStatus('building');
-        setProgress({ label: '准备画布', percent: 4 });
+        setBuildError(null);
         try {
             const theme = CARD_THEMES.find(t => t.id === themeId) || CARD_THEMES[0];
-            const canvas = await renderShareCard(
-                {
-                    song,
-                    illustration: illuRef.current,
-                    theme,
-                    noteCounts: settings.shareCardNoteCounts ? noteCounts : undefined,
-                    chartInfo: visibleChartInfo,
-                    qrText: `https://pcd.bot.cd/?song=${encodeURIComponent(song.id)}`,
-                },
-                (label, percent) => {
-                    // 只认最后一次构建，避免切换主题时旧进度乱跳
-                    if (seq === buildSeq.current) setProgress({ label, percent });
-                }
-            );
-            if (seq !== buildSeq.current) return;
+            const canvas = renderShareCard({
+                song,
+                illustration: illuRef.current,
+                theme,
+                noteCounts: settings.shareCardNoteCounts ? noteCounts : undefined,
+                chartInfo: visibleChartInfo,
+                qrText: `https://pcd.bot.cd/?song=${encodeURIComponent(song.id)}`,
+            });
             canvasRef.current = canvas;
             setDataUrl(canvas.toDataURL('image/png'));
             setStatus('ready');
         } catch (err) {
-            if (seq !== buildSeq.current) return;
             console.error('[shareCard] 生成失败', err);
+            // 之前这里只是静默回到 idle，用户看到的是空白，以为没点上。
+            // 现在把原因显示出来，并给出可复制的技术细节。
+            setBuildError(err instanceof Error ? err.message : String(err));
             setStatus('idle');
         }
     }, [song, illuReady, themeId, noteCounts, chartInfo, settings.shareCardNoteCounts, visibleChartInfo.bpm, visibleChartInfo.judgeLines, visibleChartInfo.duration]);
 
     useEffect(() => {
-        void build();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        build();
     }, [build]);
 
     // 勾选后异步拉取：各难度物量 + 曲目级 BPM / 判定线 / 时长
@@ -163,7 +174,7 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
 
             await Promise.all(
                 targets.map(async d => {
-                    const s = await fetchChartStats(song.id, d, settings.proxySource);
+                    const s = await fetchChartStats(song.id, d);
                     if (!s) return;
                     result[d] = s.notes;
                     statsByDiff[d] = s;
@@ -187,24 +198,22 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
         return () => {
             cancelled = true;
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [needsChart, song?.id, isOpen, settings.proxySource]);
+    }, [needsChart, song?.id, isOpen]);
 
     /** 下载按钮的反馈状态：null 为常态 */
     const [downloadState, setDownloadState] = useState<'saving' | 'done' | 'failed' | null>(null);
     const [copyState, setCopyState] = useState<'copying' | 'done' | 'failed' | null>(null);
 
-    /** 下载/复制按钮的反馈态：停留一会儿再回到常态，避免状态一闪而过 */
-    const flash = <T extends string | null>(
-        set: React.Dispatch<React.SetStateAction<T>>,
-        v: T | null
+    const flash = (
+        set: (v: 'saving' | 'done' | 'failed' | null) => void,
+        v: 'saving' | 'done' | 'failed' | null
     ) => {
-        set(v as T);
-        if (v !== 'saving') {
-            setTimeout(() => {
-                if (aliveRef.current) set(null as T);
-            }, 1600);
-        }
+        set(v);
+        if (v === 'saving') return;
+        // 成功/失败提示停留一会儿再回到常态，避免状态一闪而过
+        setTimeout(() => {
+            if (aliveRef.current) set(null);
+        }, 1600);
     };
 
     const handleDownload = async () => {
@@ -225,22 +234,41 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
         const ok = await copyCanvas(canvasRef.current);
         flash(setCopyState, ok ? 'done' : 'failed');
         if (!ok) {
-            // 复制被拒时给出可手动操作的提示
-            window.alert('当前浏览器不支持直接复制图片。\n你可以长按预览图保存，或点「下载图片」。');
+            // 复制被拒时给出可手动操作的提示（自绘，不用原生 alert）
+            setCopyNotice(true);
         }
     };
 
     if (!isOpen || !song) return null;
 
     return (
-        <DialogFrame onClose={onClose} labelledBy="share-card-title" className="w-full max-w-[520px] max-h-[min(88dvh,760px)]">
-            <DialogHeader id="share-card-title" eyebrow="Share" title="谱面分享卡片" onClose={onClose} />
+        <div
+            className="motion-backdrop fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-card-title"
+            onClick={onClose}
+        >
+            <div
+                className="motion-dialog relative w-full max-w-lg mx-auto overflow-hidden rounded-xl border border-slate-700 shadow-2xl flex flex-col max-h-[88vh] bg-slate-900/90 backdrop-blur-md"
+                onClick={e => e.stopPropagation()}
+            >
+                {/* 标题 */}
+                <div className="h-1 w-full bg-gradient-to-r from-brand-cyan/80 via-brand-cyan/25 to-transparent flex-shrink-0" />
+                <div className="px-5 pt-5 pb-3 border-b border-slate-700/50 flex-shrink-0">
+                    <h2 id="share-card-title" className="text-xl font-bold text-brand-cyan">
+                        谱面分享卡片
+                    </h2>
+                    <p className="text-slate-400 text-xs mt-1">
+                        生成一张可分享的图片，含曲绘、定数、谱师与二维码
+                    </p>
+                </div>
 
-                <div className="flex-1 min-h-0 overflow-y-auto thin-scroll px-5 py-4">
+                <div className="flex-1 overflow-y-auto custom-scrollbar px-5 py-4">
                     {/* 主题选择 */}
                     <div className="mb-3">
                         <div className="flex items-center justify-between mb-2">
-                            <span className="font-mono text-[10px] font-medium tracking-[.14em] text-slate-500">配色</span>
+                            <span className="text-xs text-slate-400">配色</span>
                             <span className="text-[11px] text-slate-500">
                                 {CARD_THEMES.length} 套 · 当前：
                                 {CARD_THEMES.find(t => t.id === themeId)?.name}
@@ -269,7 +297,7 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
                     </div>
 
                     {/* 预览 */}
-                    <div className="relative rounded-xl overflow-hidden bg-[#05070a] border border-white/[.08] shadow-[0_16px_40px_-12px_rgba(0,0,0,.7)]">
+                    <div className="relative rounded-xl overflow-hidden bg-slate-950 border border-slate-700/80 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)] ring-1 ring-white/5">
                         {dataUrl ? (
                             <img
                                 src={dataUrl}
@@ -277,33 +305,28 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
                                 className="w-full h-auto block"
                                 style={{ opacity: status === 'building' ? 0.5 : 1, transition: 'opacity .2s' }}
                             />
-                        ) : (
-                            <div className="flex flex-col items-center justify-center gap-3 h-64 text-slate-500 text-sm px-6">
-                                <span className="w-7 h-7 rounded-full border-2 border-white/[.12] border-t-[#22d3ee] animate-spin" />
-                                <span className="text-[13px] text-slate-300">{progress.label}</span>
-                                <span className="w-full max-w-[240px] h-1.5 rounded-full bg-white/[.08] overflow-hidden">
-                                    <span
-                                        className="block h-full rounded-full bg-[#22d3ee] transition-[width] duration-200"
-                                        style={{ width: `${progress.percent}%` }}
-                                    />
+                        ) : buildError ? (
+                            <div className="flex flex-col items-center justify-center gap-2 h-64 px-4 text-center">
+                                <span className="font-mono text-[10px] tracking-[.16em] uppercase text-[#f87171]">
+                                    生成失败
                                 </span>
-                                <span className="font-mono text-[11px] text-slate-500">{progress.percent}%</span>
+                                <p className="text-sm text-slate-300">{buildError}</p>
+                                <button
+                                    type="button"
+                                    onClick={build}
+                                    className="mt-1 px-3 py-1.5 text-[13px] rounded-lg border border-white/[.12] text-slate-200 hover:bg-white/[.05] transition-colors"
+                                >
+                                    重试
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center gap-2 h-64 text-slate-500 text-sm">
+                                正在生成卡片…
                             </div>
                         )}
                         {loadingNotes && (
                             <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 text-xs text-brand-cyan">
                                 正在读取谱面…
-                            </div>
-                        )}
-                        {!loadingNotes && status === 'building' && dataUrl && (
-                            <div className="absolute inset-x-0 bottom-0 px-3 py-2 bg-slate-950/80 flex items-center gap-2.5">
-                                <span className="w-full h-1 rounded-full bg-white/[.10] overflow-hidden">
-                                    <span
-                                        className="block h-full rounded-full bg-[#22d3ee] transition-[width] duration-200"
-                                        style={{ width: `${progress.percent}%` }}
-                                    />
-                                </span>
-                                <span className="flex-none font-mono text-[10px] text-slate-300">{progress.percent}%</span>
                             </div>
                         )}
                     </div>
@@ -313,10 +336,36 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
                     </p>
                 </div>
 
-            <DialogFooter>
-                <span className="hidden sm:inline font-mono text-[10px] font-medium tracking-[.1em] text-slate-600">手机上长按图片即可保存</span>
-                <div className="flex items-center gap-2.5">
-                    <Button variant="outline" onClick={handleCopy} disabled={!canvasRef.current || copyState === 'copying'}>
+                {/* 底部按钮 */}
+                <div className="px-5 py-4 border-t border-slate-700/50 flex flex-wrap gap-2 flex-shrink-0">
+                    <button
+                        type="button"
+                        onClick={handleDownload}
+                        disabled={!canvasRef.current || downloadState === 'saving'}
+                        aria-live="polite"
+                        className="flex-1 min-w-[120px] px-4 py-2.5 font-bold rounded-lg shadow-md transition-colors flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-400 to-brand-cyan hover:from-cyan-300 hover:to-cyan-400 text-slate-900 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                        {downloadState === 'saving' && (
+                            <span
+                                aria-hidden="true"
+                                className="inline-block w-3.5 h-3.5 rounded-full border-2 border-slate-900/30 border-t-slate-900 animate-spin"
+                            />
+                        )}
+                        {downloadState === 'saving'
+                            ? '正在下载…'
+                            : downloadState === 'done'
+                                ? '已保存到下载'
+                                : downloadState === 'failed'
+                                    ? '下载失败，重试'
+                                    : '下载图片'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleCopy}
+                        disabled={!canvasRef.current || copyState === 'copying'}
+                        aria-live="polite"
+                        className="px-4 py-2.5 font-semibold rounded-lg shadow-md transition-colors bg-slate-700 hover:bg-slate-600 text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
                         {copyState === 'copying'
                             ? '正在复制…'
                             : copyState === 'done'
@@ -324,18 +373,34 @@ export const ShareCardPopup: React.FC<ShareCardPopupProps> = ({ song, isOpen, on
                                 : copyState === 'failed'
                                     ? '复制失败'
                                     : '复制图片'}
-                    </Button>
-                    <Button variant="primary" size="md" onClick={handleDownload} disabled={!canvasRef.current || downloadState === 'saving'}>
-                        {downloadState === 'saving'
-                            ? '正在下载…'
-                            : downloadState === 'done'
-                                ? '已保存'
-                                : downloadState === 'failed'
-                                    ? '下载失败，重试'
-                                    : '下载图片'}
-                    </Button>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="px-4 py-2.5 font-semibold rounded-lg shadow-md transition-colors bg-slate-700 hover:bg-slate-600 text-slate-200"
+                    >
+                        关闭
+                    </button>
                 </div>
-            </DialogFooter>
-        </DialogFrame>
+            </div>
+
+            {copyNotice && (
+                <NoticeDialog
+                    tone="info"
+                    eyebrow="COPY NOT SUPPORTED"
+                    title="当前浏览器不支持直接复制图片"
+                    onClose={() => setCopyNotice(false)}
+                    actions={
+                        <Button variant="primary" onClick={() => setCopyNotice(false)}>
+                            知道了
+                        </Button>
+                    }
+                >
+                    <p className="text-[13px] leading-[1.6] text-slate-300">
+                        你可以长按预览图保存到相册，或点「下载图片」把卡片存下来。
+                    </p>
+                </NoticeDialog>
+            )}
+        </div>
     );
 };

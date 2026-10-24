@@ -73,7 +73,7 @@ export const songNameAliases: Record<string, string[]> = {
     ""
   ],
   "Avataar ~Reincarnation of Kalpa~": [
-    "avatar"
+    ""
   ],
   "Äventyr": [
     "aventyr"
@@ -469,7 +469,7 @@ export const songNameAliases: Record<string, string[]> = {
     "noym"
   ],
   "NO x": [
-    "nox"
+    ""
   ],
   "Non-Melodic Ragez (MUG Edit)": [
     "nmr"
@@ -670,7 +670,7 @@ export const songNameAliases: Record<string, string[]> = {
     ""
   ],
   "valor/starcross": [
-    "vs"
+    ""
   ],
   "volcanic": [
     ""
@@ -682,7 +682,7 @@ export const songNameAliases: Record<string, string[]> = {
     ""
   ],
   "Winter ↑cube↓": [
-    "winter cube"
+    ""
   ],
   "With You": [
     ""
@@ -805,7 +805,7 @@ export const songNameAliases: Record<string, string[]> = {
     "phitv","phi tv"
   ],
   "白と黒のバケモノ": [
-    "black and white monster"
+    ""
   ],
   "盏茗": [
     "tea"
@@ -826,7 +826,7 @@ export const songNameAliases: Record<string, string[]> = {
     "firefly"
   ],
   "蝎虎天体 -Lacertid-": [
-    "furry"
+    ""
   ],
   "贝多芬祝福 (Beethoven Blessing)": [
     ""
@@ -853,135 +853,6 @@ export const songNameAliases: Record<string, string[]> = {
     "wind island"
   ],
   "黄金之城 (GOLD TOWN)": [
-    ""
-  ],
-  "JunXion Between Life And Death(VIP Mix)": [
-    "junction"
-  ],
-  "About The Universe": [
-    "atu"
-  ],
-  "Implexrough": [
-    ""
-  ],
-  "Evanescent": [
-    ""
-  ],
-  "Entrance to the Chaos": [
-    ""
-  ],
-  "Exoplanetary Mirage": [
-    ""
-  ],
-  "True Home, True World (Rework)": [
-    ""
-  ],
-  "Ametrine": [
-    ""
-  ],
-  "Petrichor": [
-    ""
-  ],
-  "ハテ": [
-    "hate"
-  ],
-  "Desultory Signals": [
-    ""
-  ],
-  "Message": [
-    ""
-  ],
-  "What do you want more than a Happy ending?": [
-    "wdywmtahe"
-  ],
-  "Xep+ion": [
-    "xeption"
-  ],
-  "Archidoxen": [
-    "doxx"
-  ],
-  "百鬼֎夜行": [
-    ""
-  ],
-  "BANGING STRIKE": [
-    ""
-  ],
-  "The Whole Rest": [
-    ""
-  ],
-  "Cristalisia": [
-    ""
-  ],
-  "Hydra": [
-    ""
-  ],
-  "最高傑作": [
-    ""
-  ],
-  "Locomotive": [
-    ""
-  ],
-  "Alb": [
-    ""
-  ],
-  "Incyde": [
-    ""
-  ],
-  "彩": [
-    "aya"
-  ],
-  "彼方へ、名もなき海辺より": [
-    ""
-  ],
-  "ABYSS MOTION 192.333": [
-    "192333"
-  ],
-  "Xenophobia": [
-    ""
-  ],
-  "Verrückt": [
-    "verrukt"
-  ],
-  "After ZABANIYA (MUG Edit)": [
-    ""
-  ],
-  "下一秒": [
-    ""
-  ],
-  "玩具狂奏曲 -終焉-": [
-    ""
-  ],
-  "Snow Dance": [
-    ""
-  ],
-  "亂★舞": [
-    ""
-  ],
-  "Cleyera": [
-    ""
-  ],
-  "70 Minutes Fighters": [
-    "70minutefighters"
-  ],
-  "Gungnir Fracture": [
-    ""
-  ],
-  "夢の降る日に": [
-    "dreams"
-  ],
-  "Der Schneid": [
-    ""
-  ],
-  "星拂云锦 feat. koi": [
-    ""
-  ],
-  "[NWAD]": [
-    "[dawn]"
-  ],
-  "Devastating History": [
-    ""
-  ],
-  "Cryogenic": [
     ""
   ]
 };

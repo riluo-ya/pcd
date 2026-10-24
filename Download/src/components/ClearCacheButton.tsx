@@ -1,13 +1,9 @@
 import React, { useState } from 'react';
 import { clearSiteCache, hardReload, KEEP_STORAGE_KEYS } from '../utils/clearCache';
-import { bumpCacheEpoch, getCacheEpoch, PROXY_SOURCES } from '../utils/resourceUrls';
-import { useSettings } from '../contexts/SettingsContext';
-
-export const CLEAR_CACHE_BUTTON_CLASS =
-    'px-3.5 py-2 text-[13px] rounded-lg font-semibold transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed border border-white/[.12] hover:bg-white/[.05] text-slate-200';
+import { bumpCacheEpoch, getSource, getCacheEpoch } from '../utils/sources';
 
 interface ClearCacheButtonProps {
-    /** 额外样式类，默认与弹窗按钮风格一致 */
+    /** 额外样式类，默认与顶部按钮风格一致 */
     className?: string;
     label?: string;
     /** 是否需要二次确认，默认 true */
@@ -17,6 +13,9 @@ interface ClearCacheButtonProps {
     /** 清理完成后的回调，可用于埋点或提示 */
     onDone?: () => void;
 }
+
+const DEFAULT_CLASS =
+    'px-4 py-2 font-semibold rounded-lg shadow-md transition-colors duration-200 bg-slate-700/50 hover:bg-slate-700 text-slate-300 hover:text-white disabled:opacity-60 disabled:cursor-not-allowed';
 
 /** 用「点两下确认」代替 confirm 弹窗 —— 手机 / WebView 里弹窗常被拦，点了会没反应 */
 function useTwoStepConfirm(resetMs = 3000) {
@@ -53,7 +52,6 @@ export const ClearCacheButton: React.FC<ClearCacheButtonProps> = ({
     bustCdn = true,
     onDone,
 }) => {
-    const { settings } = useSettings();
     const [busy, setBusy] = useState(false);
     const confirm = useTwoStepConfirm();
 
@@ -66,7 +64,7 @@ export const ClearCacheButton: React.FC<ClearCacheButtonProps> = ({
 
             await clearSiteCache();
             await hardReload();
-            onDone?.();
+            onDone && onDone();
             // 正常情况页面已经跳转，不会走到这里
         } catch (e) {
             console.error('[clearCache] 清除失败', e);
@@ -89,7 +87,8 @@ export const ClearCacheButton: React.FC<ClearCacheButtonProps> = ({
         }
     };
 
-    const sourceName = PROXY_SOURCES.find(s => s.id === settings.proxySource)?.label ?? settings.proxySource;
+    const src = getSource();
+    const btnClass = className || DEFAULT_CLASS;
     const confirming = needConfirm && confirm.pending;
 
     return (
@@ -99,13 +98,14 @@ export const ClearCacheButton: React.FC<ClearCacheButtonProps> = ({
             disabled={busy}
             title={
                 `清理本地缓存并自动刷新页面。\n` +
-                `保留：登录凭证、加速源（当前 ${sourceName}）、线路偏好。\n` +
+                `保留：登录凭证、加速源（当前 ${src.name}）、线路偏好。\n` +
                 (bustCdn ? '同时强制 CDN 回源，解决数据版本落后。' : '')
             }
             className={
                 confirming
-                    ? 'px-3.5 py-2 text-[13px] rounded-lg font-semibold transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-[#fbbf24] hover:bg-[#fcd34d] text-[#1a1204] font-bold'
-                    : className || CLEAR_CACHE_BUTTON_CLASS
+                    ? btnClass.replace(/bg-slate-700\/50|hover:bg-slate-700|text-slate-300|hover:text-white/g, '') +
+                      ' bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold'
+                    : btnClass
             }
         >
             {busy ? '正在清除…' : confirming ? '再点一次确认' : label}
@@ -115,13 +115,12 @@ export const ClearCacheButton: React.FC<ClearCacheButtonProps> = ({
 
 /** 给「设置」弹窗用的详细说明组件：展示清缓存会保留什么 */
 export const ClearCacheInfo: React.FC = () => {
-    const { settings } = useSettings();
-    const sourceName = PROXY_SOURCES.find(s => s.id === settings.proxySource)?.label ?? settings.proxySource;
+    const src = getSource();
     const epoch = getCacheEpoch();
     return (
-        <div className="text-[13px] leading-[1.5] text-slate-400 space-y-1">
+        <div className="text-xs text-slate-400 space-y-1">
             <div>
-                当前加速源：<span className="text-slate-200">{sourceName}</span>
+                当前加速源：<span className="text-slate-200">{src.name}</span>
                 <span className="text-slate-500">（清除缓存后保持不变）</span>
             </div>
             <div>

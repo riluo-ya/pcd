@@ -1,11 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react';
+
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Spinner } from './Spinner';
+import { songNameAliases } from '../song-aliases';
 import { useSettings } from '../contexts/SettingsContext';
-import { Song, SortConfig } from '../types';
-import { ErrorIcon, MagnifyingGlassIcon } from './Icons';
-import { getBlurIllustrationUrl } from '../utils/resourceUrls';
-import { useSongFilter, SORT_CYCLE, getSortIndex } from '../hooks/useSongFilter';
+import { getSongEffect } from '../song-effects';
+import { Song, SortConfig, SortType, SortDirection } from '../types';
+import { ChevronDownIcon, ErrorIcon, MagnifyingGlassIcon, ArrowsUpDownIcon, CheckIcon, FunnelIcon, XMarkIcon } from './Icons';
+import { NameCombobox } from './NameCombobox';
+import {
+    QuickFilters,
+    emptyQuickFilters,
+    countActiveQuickFilters,
+    applyQuickFilters,
+    collectCharters,
+    collectComposers,
+    DIFFS,
+} from '../utils/bulkFilters';
 
 interface SongSelectorProps {
   isLoading: boolean;
@@ -17,239 +28,767 @@ interface SongSelectorProps {
   onSortConfigChange: (config: SortConfig) => void;
 }
 
-const SongThumbnail: React.FC<{ src: string }> = ({ src }) => {
-    const [loaded, setLoaded] = useState(false);
-    const [failed, setFailed] = useState(false);
-    return (
-        <div className="relative w-11 h-[26px] flex-none rounded overflow-hidden bg-[repeating-linear-gradient(135deg,#1e293b_0_4px,#172033_4px_8px)]">
-            {!failed && (
-                <img
-                    src={src}
-                    alt=""
-                    loading="lazy"
-                    decoding="async"
-                    referrerPolicy="no-referrer"
-                    onLoad={() => setLoaded(true)}
-                    onError={() => setFailed(true)}
-                    className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-                />
-            )}
-        </div>
-    );
+// Add characters to this regex to ignore them in search.
+// For example, to ignore dots and dashes: /[.-]/g
+const IGNORED_SEARCH_CHARS_REGEX = /\./g;
+
+/**
+ * Normalizes a string for searching by removing ignored characters and converting to lowercase.
+ * @param str The string to normalize.
+ * @returns The normalized string.
+ */
+const normalizeSearchString = (str: string): string => {
+    return str.replace(IGNORED_SEARCH_CHARS_REGEX, '').toLowerCase();
 };
 
 export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, songs, selectedSong, onSongSelect, sortConfig, onSortConfigChange }) => {
     const { settings } = useSettings();
-    const [isRangeOpen, setIsRangeOpen] = useState(false);
-    const {
-        searchTerm, setSearchTerm,
-        minInput, setMinInput,
-        maxInput, setMaxInput,
-        onlyHasAt, setOnlyHasAt,
-        difficultyBounds, isRangeActive, rangeLabel,
-        displayedSongs, isSuggestion,
-    } = useSongFilter(songs);
-    const rangeWrapperRef = useRef<HTMLDivElement>(null);
+    const [isOpen, setIsOpen] = useState(false);
+    const [isSortOpen, setIsSortOpen] = useState(false);
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [filters, setFilters] = useState<QuickFilters>(emptyQuickFilters);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+    const wrapperRef = useRef<HTMLDivElement>(null);
+    const sortWrapperRef = useRef<HTMLDivElement>(null);
+    const filterWrapperRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
-    const parentRef = useRef<HTMLDivElement>(null);
+    const parentRef = useRef<HTMLUListElement>(null);
 
-    // "/" focuses the search box from anywhere on the page.
+    /** 曲库里出现过的谱师 / 曲师，用于筛选下拉 */
+    const charterOptions = useMemo(() => collectCharters(songs), [songs]);
+    const composerOptions = useMemo(() => collectComposers(songs), [songs]);
+    const activeFilterCount = useMemo(() => countActiveQuickFilters(filters), [filters]);
+
+    const setFilter = <K extends keyof QuickFilters>(key: K, value: QuickFilters[K]) =>
+        setFilters(prev => ({ ...prev, [key]: value }));
+
+    const toggleDiffFilter = (d: string) =>
+        setFilters(prev => ({
+            ...prev,
+            requireDiffs: prev.requireDiffs.includes(d)
+                ? prev.requireDiffs.filter(x => x !== d)
+                : [...prev.requireDiffs, d],
+        }));
+
+    /** 筛选后的曲库，作为搜索的候选集 */
+    const filteredSongs = useMemo(() => applyQuickFilters(songs, filters), [songs, filters]);
+
     useEffect(() => {
-        const handleKey = (e: KeyboardEvent) => {
-            if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
-            const target = e.target as HTMLElement | null;
-            if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
-            e.preventDefault();
-            searchInputRef.current?.focus();
-        };
-        document.addEventListener('keydown', handleKey);
-        return () => document.removeEventListener('keydown', handleKey);
-    }, []);
+        const handler = setTimeout(() => {
+            setDebouncedSearchTerm(searchTerm);
+        }, 200);
+        return () => clearTimeout(handler);
+    }, [searchTerm]);
+
+    const aliasList = useMemo(() => {
+        const list: { alias: string, song: Song }[] = [];
+        if (songs.length > 0) {
+            for (const songName in songNameAliases) {
+                const song = songs.find(s => s.name === songName);
+                if (song) {
+                    const aliases = songNameAliases[songName];
+                    for (const alias of aliases) {
+                        list.push({ alias: alias.toLowerCase(), song });
+                    }
+                }
+            }
+        }
+        return list;
+    }, [songs]);
+
+    const { displayedSongs, isSuggestion } = useMemo(() => {
+        if (!debouncedSearchTerm) {
+            return { displayedSongs: filteredSongs, isSuggestion: false };
+        }
+        const normalizedSearchTerm = normalizeSearchString(debouncedSearchTerm);
+
+        const directMatches = filteredSongs.filter(song =>
+            normalizeSearchString(song.name).includes(normalizedSearchTerm)
+        );
+
+        if (directMatches.length > 0) {
+            return { displayedSongs: directMatches, isSuggestion: false };
+        }
+        
+        // No direct matches, check aliases.
+        const aliasMatches = aliasList
+            .filter(item => normalizeSearchString(item.alias).includes(normalizedSearchTerm))
+            .map(item => item.song);
+        
+        if (aliasMatches.length > 0) {
+            const uniqueAliasMatches = Array.from(new Map(aliasMatches.map(song => [song.id, song])).values());
+            return { displayedSongs: uniqueAliasMatches, isSuggestion: true };
+        }
+
+        return { displayedSongs: [], isSuggestion: false };
+    }, [filteredSongs, debouncedSearchTerm, aliasList]);
+
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (rangeWrapperRef.current && !rangeWrapperRef.current.contains(event.target as Node)) {
-                setIsRangeOpen(false);
+            // Close song selector if clicked outside of it AND outside of the sort button
+            if (
+                wrapperRef.current && 
+                !wrapperRef.current.contains(event.target as Node) &&
+                sortWrapperRef.current &&
+                !sortWrapperRef.current.contains(event.target as Node)
+            ) {
+                setIsOpen(false);
+            }
+            
+            // Close sort popup if clicked outside of it
+            if (sortWrapperRef.current && !sortWrapperRef.current.contains(event.target as Node)) {
+                setIsSortOpen(false);
+            }
+
+            // Close filter popup if clicked outside of it
+            if (filterWrapperRef.current && !filterWrapperRef.current.contains(event.target as Node)) {
+                setIsFilterOpen(false);
             }
         };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [wrapperRef, sortWrapperRef, filterWrapperRef]);
+
+    // Esc 关闭当前打开的那个浮层，从最内层开始关
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            if (isSortOpen) { setIsSortOpen(false); return; }
+            if (isFilterOpen) { setIsFilterOpen(false); return; }
+            if (isOpen) {
+                setIsOpen(false);
+                setSearchTerm('');
+            }
+        };
+        document.addEventListener("keydown", onKeyDown);
+        return () => document.removeEventListener("keydown", onKeyDown);
+    }, [isOpen, isSortOpen, isFilterOpen]);
+    
+    useEffect(() => {
+        if (isOpen) {
+            setTimeout(() => searchInputRef.current?.focus(), 100);
+        }
+    }, [isOpen]);
 
     const rowVirtualizer = useVirtualizer({
         count: displayedSongs.length,
         getScrollElement: () => parentRef.current,
-        estimateSize: () => 50,
-        overscan: 6,
+        estimateSize: () => 44, // Approximate height of a list item (py-2.5 is 10px top/bottom + line height)
+        overscan: 5, // Add a bit of overhead to prevent visual glitches
     });
 
-    // Keep the selected song in view when it changes from outside the list (e.g. ?song= in the URL).
-    useEffect(() => {
-        if (!selectedSong) return;
-        const index = displayedSongs.findIndex(s => s.id === selectedSong.id);
-        if (index >= 0) rowVirtualizer.scrollToIndex(index, { align: 'auto' });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedSong]);
-
-    const sortIndex = getSortIndex(sortConfig);
-    const cycleSort = () => onSortConfigChange(SORT_CYCLE[(sortIndex + 1) % SORT_CYCLE.length].config);
-
-    const renderList = () => {
-        if (isLoading) {
-            return (
-                <div className="flex items-center justify-center gap-3 text-slate-400 text-sm py-10">
-                    <Spinner />
-                    <span>正在加载曲库…</span>
-                </div>
-            );
-        }
-        if (error) {
-            return (
-                <div className="flex flex-col items-center gap-2 text-center px-6 py-10">
-                    <span className="flex items-center gap-2 text-[#f87171] text-sm font-semibold"><ErrorIcon className="w-5 h-5" />曲库加载失败</span>
-                    <p className="font-mono text-[11px] text-slate-500 break-all">{error}</p>
-                </div>
-            );
-        }
-        if (displayedSongs.length === 0) {
-            return <p className="px-4 py-10 text-center text-sm text-slate-500">没有找到匹配的曲目。</p>;
-        }
-        return (
-            <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
-                {rowVirtualizer.getVirtualItems().map(virtualItem => {
-                    const song = displayedSongs[virtualItem.index];
-                    const selected = selectedSong?.id === song.id;
-                    return (
-                        <button
-                            key={song.id}
-                            type="button"
-                            role="option"
-                            aria-selected={selected}
-                            onClick={() => onSongSelect(song)}
-                            className={`absolute left-0 top-0 w-full h-12 flex items-center gap-3 px-2.5 rounded-lg text-left transition-colors ${
-                                selected ? 'bg-[rgba(34,211,238,0.10)]' : 'hover:bg-white/[.04]'
-                            }`}
-                            style={{ transform: `translateY(${virtualItem.start}px)` }}
-                        >
-                            <SongThumbnail src={getBlurIllustrationUrl(settings.proxySource, song.id)} />
-                            <span className="flex-1 min-w-0 flex flex-col">
-                                <span className={`text-sm leading-[1.2] truncate ${selected ? 'text-white' : 'text-slate-300'}`}>
-                                    {song.name}
-                                </span>
-                                <span className="text-[11px] leading-[1.3] text-slate-500 truncate">{song.composer}</span>
-                            </span>
-                        </button>
-                    );
-                })}
-            </div>
-        );
+    const handleSelectSong = (song: Song) => {
+        onSongSelect(song);
+        setIsOpen(false);
+        setSearchTerm('');
     };
 
+    const handleSortTypeChange = (type: SortType) => {
+        onSortConfigChange({ ...sortConfig, type });
+        // setIsSortOpen(false); // Keep open to allow changing direction too if desired
+    };
+
+    const handleSortDirectionChange = (direction: SortDirection) => {
+        onSortConfigChange({ ...sortConfig, direction });
+        // setIsSortOpen(false);
+    };
+
+    if (isLoading) {
+        return (
+            <div className="flex flex-col min-h-0 h-full bg-[#0d1118]">
+                <div className="flex-1 flex items-center justify-center gap-3 text-slate-400 text-sm">
+                    <Spinner />
+                    <span>正在加载歌曲列表…</span>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="flex flex-col min-h-0 h-full bg-[#0d1118]">
+                <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center px-6">
+                    <span className="flex items-center gap-2 text-[#f87171] text-sm font-semibold">
+                        <ErrorIcon className="w-5 h-5" />
+                        加载歌曲失败
+                    </span>
+                    <p className="font-mono text-[11px] text-slate-500 break-all">{error}</p>
+                </div>
+            </div>
+        );
+    }
+    
     return (
         <div className="flex flex-col min-h-0 h-full bg-[#0d1118]">
             <div className="flex-none bg-[#090c11] border-b border-white/[.1]">
-            <div className="p-4 flex flex-col gap-3">
-                <label className="h-[42px] flex items-center gap-2.5 px-3 rounded-[10px] bg-white/[.04] border border-white/[.08] focus-within:border-[rgba(34,211,238,.45)] transition-colors">
-                    <MagnifyingGlassIcon className="w-4 h-4 text-slate-500 flex-none" />
-                    <input
-                        ref={searchInputRef}
-                        type="text"
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                        onKeyDown={e => {
-                            if (e.key === 'Enter' && displayedSongs.length > 0) onSongSelect(displayedSongs[0]);
-                            if (e.key === 'Escape') { setSearchTerm(''); e.currentTarget.blur(); }
-                        }}
-                        placeholder="搜索曲名 / 曲师 / 别名"
-                        aria-label="搜索曲名、曲师或别名"
-                        className="flex-1 min-w-0 bg-transparent text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none"
-                    />
-                    {searchTerm ? (
-                        <button type="button" onClick={() => setSearchTerm('')} aria-label="清空搜索" className="text-slate-500 hover:text-slate-300">
-                            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
-                    ) : (
-                        <kbd className="font-mono text-[10px] font-medium text-slate-500 px-1.5 py-0.5 border border-white/10 rounded">/</kbd>
-                    )}
-                </label>
-            </div>
-
-            <div className="px-4 pb-2 flex items-center gap-1.5">
-                <span className="flex-1 min-w-0 truncate font-mono text-[10px] font-medium tracking-[.12em] text-slate-600">
-                    {isLoading ? '— 首 | ' : `${displayedSongs.length} 首 | `}
-                    {isSuggestion && <span className="text-[#22d3ee]"> · 你是不是要找</span>}
-                </span>
+                <div className="p-3 flex items-center gap-2">
+                    <label className="h-[42px] flex-1 min-w-0 flex items-center gap-2.5 px-3 rounded-[10px] bg-white/[.04] border border-white/[.08] focus-within:border-[rgba(34,211,238,.45)] transition-colors">
+                        <MagnifyingGlassIcon className="w-4 h-4 text-slate-500 flex-none" />
+                        <input
+                            ref={searchInputRef}
+                            type="text"
+                            placeholder="搜索歌曲…"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="flex-1 min-w-0 bg-transparent text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none"
+                        />
+                        {searchTerm && (
+                            <button type="button" onClick={() => setSearchTerm('')} aria-label="清除搜索" className="text-slate-500 hover:text-slate-300">
+                                <XMarkIcon className="w-4 h-4" />
+                            </button>
+                        )}
+                    </label>
+            <div ref={filterWrapperRef} className="relative">
                 <button
                     type="button"
-                    aria-pressed={onlyHasAt}
-                    onClick={() => setOnlyHasAt(v => !v)}
-                    title={onlyHasAt ? '只看有 AT 谱面的曲目' : '只看有 AT 谱面的曲目'}
-                    className={`font-mono text-[11px] font-semibold px-2 py-1 rounded-md transition-colors ${onlyHasAt ? 'text-green-400 bg-green-400/[.12]' : 'text-white hover:bg-white/[.06]'}`}
+                    onClick={() => setIsFilterOpen(!isFilterOpen)}
+                    className={`relative flex items-center justify-center w-[42px] h-[42px] rounded-[10px] border transition-colors duration-200 flex-shrink-0 ${
+                        activeFilterCount > 0
+                            ? 'border-brand-cyan bg-brand-cyan/15 text-brand-cyan'
+                            : isFilterOpen
+                                ? 'border-slate-700 bg-slate-700 text-slate-200'
+                                : 'border-slate-700 bg-slate-800/50 hover:bg-slate-800/80 text-slate-400'
+                    }`}
+                    title="按难度 / 谱师 / 曲师筛选"
+                    aria-haspopup="true"
+                    aria-expanded={isFilterOpen}
                 >
-                    有 AT
+                    <FunnelIcon className="w-6 h-6" />
+                    <span className="sr-only">筛选选项</span>
+                    {activeFilterCount > 0 && (
+                        <span
+                            className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-brand-cyan text-slate-900 text-[11px] font-bold flex items-center justify-center"
+                            aria-hidden="true"
+                        >
+                            {activeFilterCount}
+                        </span>
+                    )}
                 </button>
-                <div ref={rangeWrapperRef} className="relative">
+
+                {isFilterOpen && (
+                    <div className="motion-dropdown absolute right-0 z-50 mt-2 w-72 rounded-xl border border-slate-700 bg-slate-800 shadow-2xl overflow-hidden">
+                        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700">
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">筛选</span>
+                            {activeFilterCount > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setFilters(emptyQuickFilters)}
+                                    className="text-xs text-slate-400 hover:text-brand-cyan flex items-center gap-1"
+                                >
+                                    <XMarkIcon className="w-3.5 h-3.5" />
+                                    清除
+                                </button>
+                            )}
+                        </div>
+            {activeFilterCount > 0 && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-brand-cyan/5 border-b border-slate-700">
+                    <span className="text-[11px] text-slate-400 flex-shrink-0">筛选中</span>
+                    <div className="flex flex-wrap gap-1 flex-1">
+                        {filters.requireDiffs.length > 0 && (
+                            <span className="px-1.5 py-0.5 rounded bg-brand-cyan/15 text-brand-cyan text-[10px] font-semibold">
+                                含 {filters.requireDiffs.join('/')}
+                            </span>
+                        )}
+                        {(filters.levelMin || filters.levelMax) && (
+                            <span className="px-1.5 py-0.5 rounded bg-brand-cyan/15 text-brand-cyan text-[10px] font-semibold">
+                                定数 {filters.levelMin || '不限'} ~ {filters.levelMax || '不限'}
+                            </span>
+                        )}
+                        {filters.levels && (
+                            <span className="px-1.5 py-0.5 rounded bg-brand-cyan/15 text-brand-cyan text-[10px] font-semibold">
+                                定数 = {filters.levels}
+                            </span>
+                        )}
+                        {filters.charter && (
+                            <span className="px-1.5 py-0.5 rounded bg-brand-cyan/15 text-brand-cyan text-[10px] font-semibold truncate max-w-[9rem]">
+                                谱师 {filters.charter}
+                            </span>
+                        )}
+                        {filters.composer && (
+                            <span className="px-1.5 py-0.5 rounded bg-brand-cyan/15 text-brand-cyan text-[10px] font-semibold truncate max-w-[9rem]">
+                                曲师 {filters.composer}
+                            </span>
+                        )}
+                    </div>
                     <button
                         type="button"
-                        onClick={() => setIsRangeOpen(o => !o)}
-                        aria-expanded={isRangeOpen}
-                        title="按定数范围筛选"
-                        className={`font-mono text-[11px] font-medium px-1.5 py-1 rounded-md transition-colors hover:bg-white/[.04] ${isRangeActive ? 'text-[#22d3ee]' : 'text-slate-500 hover:text-slate-300'}`}
+                        onClick={() => setFilters(emptyQuickFilters)}
+                        className="text-slate-500 hover:text-slate-300 flex-shrink-0"
+                        aria-label="清除筛选"
                     >
-                        {rangeLabel}
+                        <XMarkIcon className="w-3.5 h-3.5" />
                     </button>
-                    {isRangeOpen && (
-                        <div className="motion-dropdown absolute right-0 z-40 mt-2 w-56 p-3 rounded-xl border border-white/[.08] bg-[rgba(12,15,22,.98)] shadow-[0_20px_50px_rgba(0,0,0,.5)] flex flex-col gap-2.5">
-                            <span className="font-mono text-[10px] font-medium tracking-[.14em] text-slate-500">难度范围</span>
-                            <div className="flex items-center gap-2">
-                                {[
-                                    { value: minInput, set: setMinInput, placeholder: difficultyBounds?.min, label: '最低定数' },
-                                    { value: maxInput, set: setMaxInput, placeholder: difficultyBounds?.max, label: '最高定数' },
-                                ].map((field, i) => (
-                                    <React.Fragment key={field.label}>
-                                        {i === 1 && <span className="text-slate-600">–</span>}
-                                        <input
-                                            type="number"
-                                            inputMode="decimal"
-                                            step={0.1}
-                                            min={difficultyBounds?.min}
-                                            max={difficultyBounds?.max}
-                                            placeholder={field.placeholder !== undefined ? String(field.placeholder) : ''}
-                                            value={field.value}
-                                            onChange={e => field.set(e.target.value)}
-                                            disabled={!difficultyBounds}
-                                            aria-label={field.label}
-                                            className="w-full min-w-0 h-8 rounded-lg bg-white/[.04] border border-white/[.08] text-center font-mono text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-[rgba(34,211,238,.45)] disabled:opacity-50"
-                                        />
-                                    </React.Fragment>
-                                ))}
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => { setMinInput(''); setMaxInput(''); }}
-                                disabled={!minInput && !maxInput}
-                                className="self-start text-xs font-semibold text-slate-400 hover:text-white disabled:opacity-40 disabled:hover:text-slate-400"
-                            >
-                                重置范围
-                            </button>
-                        </div>
-                    )}
                 </div>
+            )}
+
+                        <div className="p-3 space-y-3 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                            {/* 难度 */}
+                            <div>
+                                <div className="px-1 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                    必须含难度
+                                </div>
+                                <div className="flex gap-1.5 mt-1">
+                                    {DIFFS.map(d => (
+                                        <button
+                                            key={d}
+                                            type="button"
+                                            onClick={() => toggleDiffFilter(d)}
+                                            className={`flex-1 py-1.5 text-xs font-semibold rounded-md border transition-colors ${
+                                                filters.requireDiffs.includes(d)
+                                                    ? 'border-brand-cyan text-brand-cyan bg-brand-cyan/10'
+                                                    : 'border-slate-600 text-slate-400 hover:border-slate-500'
+                                            }`}
+                                        >
+                                            {d}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 指定定数 */}
+                            <div>
+                                <div className="px-1 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                    指定定数
+                                </div>
+                                <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={filters.levels}
+                                    onChange={e => setFilter('levels', e.target.value)}
+                                    placeholder="如 17、17.6、15.3"
+                                    className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-cyan"
+                                />
+                                <p className="text-[11px] text-slate-600 mt-1 px-1">
+                                    精确定数，可带小数也可不带；多个用逗号分隔，如 15.3, 17.6
+                                </p>
+                            </div>
+
+                            {/* 定数区间 */}
+                            <div>
+                                <div className="px-1 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                    定数区间
+                                </div>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <input
+                                        type="number"
+                                        inputMode="decimal"
+                                        value={filters.levelMin}
+                                        onChange={e => setFilter('levelMin', e.target.value)}
+                                        placeholder="最低"
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-cyan"
+                                    />
+                                    <span className="text-slate-600 text-xs flex-shrink-0">~</span>
+                                    <input
+                                        type="number"
+                                        inputMode="decimal"
+                                        value={filters.levelMax}
+                                        onChange={e => setFilter('levelMax', e.target.value)}
+                                        placeholder="最高"
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-cyan"
+                                    />
+                                </div>
+                                <p className="text-[11px] text-slate-600 mt-1 px-1">
+                                    任一难度落在区间内即命中；与「指定定数」同时填写时需两者都满足
+                                </p>
+                            </div>
+
+                            {/* 谱师 */}
+                            <div>
+                                <div className="flex items-center justify-between px-1 py-1">
+                                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                        谱师
+                                    </span>
+                                    <span className="text-[10px] text-slate-600">
+                                        共 {charterOptions.length} 位
+                                    </span>
+                                </div>
+                                <div className="mt-1">
+                                    <NameCombobox
+                                        placeholder="输入或选择谱师"
+                                        options={charterOptions}
+                                        value={filters.charter}
+                                        onChange={v => setFilter('charter', v)}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* 曲师 */}
+                            <div>
+                                <div className="flex items-center justify-between px-1 py-1">
+                                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                        曲师
+                                    </span>
+                                    <span className="text-[10px] text-slate-600">
+                                        共 {composerOptions.length} 位
+                                    </span>
+                                </div>
+                                <div className="mt-1">
+                                    <NameCombobox
+                                        placeholder="输入或选择曲师"
+                                        options={composerOptions}
+                                        value={filters.composer}
+                                        onChange={v => setFilter('composer', v)}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="px-3 py-2 border-t border-slate-700 text-xs text-slate-500">
+                            命中 <span className="text-brand-cyan font-semibold">{filteredSongs.length}</span> / {songs.length} 首
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <div ref={sortWrapperRef} className="relative">
                 <button
                     type="button"
-                    onClick={cycleSort}
-                    title="切换排序方式"
-                    className="flex items-center gap-1 px-1.5 py-1 rounded-md text-xs text-slate-400 hover:text-slate-200 hover:bg-white/[.04] transition-colors"
+                    onClick={() => setIsSortOpen(!isSortOpen)}
+                    className={`flex items-center justify-center w-14 h-14 rounded-xl border border-slate-700 shadow-lg backdrop-blur-sm transition-colors duration-200 flex-shrink-0 ${isSortOpen ? 'bg-slate-700 text-slate-200' : 'bg-slate-800/50 hover:bg-slate-800/80 text-slate-400'}`}
+                    title="排序选项"
+                    aria-haspopup="true"
+                    aria-expanded={isSortOpen}
                 >
-                    {SORT_CYCLE[sortIndex].label}
-                    <svg width="12" height="12" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5L7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5" /></svg>
+                    <ArrowsUpDownIcon className="w-6 h-6" />
+                    <span className="sr-only">排序选项</span>
                 </button>
+
+                {isSortOpen && (
+                    <div className="motion-dropdown absolute right-0 z-50 mt-2 w-48 rounded-xl border border-slate-700 bg-slate-800 shadow-2xl overflow-hidden">
+                        <div className="py-1">
+                            <div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                排序方式
+                            </div>
+                            <button
+                                onClick={() => handleSortTypeChange('alphanumerical')}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center justify-between transition-colors duration-150"
+                            >
+                                <span>字母数字排序</span>
+                                {sortConfig.type === 'alphanumerical' && <CheckIcon className="w-4 h-4 text-brand-cyan" />}
+                            </button>
+                            <button
+                                onClick={() => handleSortTypeChange('unsorted')}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center justify-between transition-colors duration-150"
+                            >
+                                <span>不排序</span>
+                                {sortConfig.type === 'unsorted' && <CheckIcon className="w-4 h-4 text-brand-cyan" />}
+                            </button>
+                            
+                            <div className="my-1 border-t border-slate-700"></div>
+                            
+                            <div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                顺序
+                            </div>
+                            <button
+                                onClick={() => handleSortDirectionChange('asc')}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center justify-between transition-colors duration-150"
+                            >
+                                <span>升序</span>
+                                {sortConfig.direction === 'asc' && <CheckIcon className="w-4 h-4 text-brand-cyan" />}
+                            </button>
+                            <button
+                                onClick={() => handleSortDirectionChange('desc')}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center justify-between transition-colors duration-150"
+                            >
+                                <span>降序</span>
+                                {sortConfig.direction === 'desc' && <CheckIcon className="w-4 h-4 text-brand-cyan" />}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+                </div>
+
+                {/* 走别名命中时提示一下，避免用户以为搜到了不相关的歌 */}
+                {isSuggestion && displayedSongs.length > 0 && (
+                    <div className="px-4 py-1.5 font-mono text-[10px] font-medium tracking-[.12em] text-[#22d3ee]">
+                        DID YOU MEAN
+                    </div>
+                )}
             </div>
 
+            <ul ref={parentRef} className="flex-1 min-h-0 overflow-y-auto thin-scroll px-2 py-2 relative" role="listbox">
+                            {displayedSongs.length > 0 ? (
+                                <div
+                                    style={{
+                                        height: `${rowVirtualizer.getTotalSize()}px`,
+                                        width: '100%',
+                                        position: 'relative',
+                                    }}
+                                >
+                                    {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+                                        const song = displayedSongs[virtualItem.index];
+                                        const hasEffect = settings.useNewUi && settings.newUiSongSpecificEffects && getSongEffect(song.name);
+                                        return (
+                                            <li
+                                                key={virtualItem.key}
+                                                className="px-2.5 cursor-pointer rounded-lg flex items-center gap-3 absolute top-0 left-0 w-full transition-colors"
+                                                style={{
+                                                    height: `${virtualItem.size}px`,
+                                                    transform: `translateY(${virtualItem.start}px)`,
+                                                    background: selectedSong?.id === song.id ? 'rgba(34,211,238,.10)' : undefined,
+                                                }}
+                                                onClick={() => handleSelectSong(song)}
+                                                role="option"
+                                                aria-selected={selectedSong?.id === song.id}
+                                            >
+                                                <span className="flex-1 min-w-0 flex flex-col">
+                                                    <span className={`text-sm leading-[1.2] truncate ${selectedSong?.id === song.id ? 'text-white' : 'text-slate-300'}`}>
+                                                        {song.name}
+                                                    </span>
+                                                    <span className="text-[11px] leading-[1.3] text-slate-500 truncate">{song.composer}</span>
+                                                </span>
+                                                {hasEffect && <span className="text-yellow-400 text-sm flex-none">✨</span>}
+                                            </li>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <li className="px-4 py-4 text-center">
+                                    <p className="text-slate-500 text-sm">未找到歌曲。</p>
+                                    {/* 区分「搜不到」和「筛选太严」，给出对应的下一步 */}
+                                    {activeFilterCount > 0 ? (
+                                        <>
+                                            <p className="text-xs text-slate-600 mt-1">
+                                                当前筛选下还有 {filteredSongs.length} 首，可以放宽条件试试。
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={() => setFilters(emptyQuickFilters)}
+                                                className="mt-2 text-xs text-brand-cyan hover:underline"
+                                            >
+                                                清除全部筛选
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <p className="text-xs text-slate-600 mt-1">换个关键词试试。</p>
+                                    )}
+                                </li>
+                            )}
+            </ul>
+            
+            <div ref={filterWrapperRef} className="relative">
+                <button
+                    type="button"
+                    onClick={() => setIsFilterOpen(!isFilterOpen)}
+                    className={`relative flex items-center justify-center w-14 h-14 rounded-xl border shadow-lg backdrop-blur-sm transition-colors duration-200 flex-shrink-0 ${
+                        activeFilterCount > 0
+                            ? 'border-brand-cyan bg-brand-cyan/15 text-brand-cyan'
+                            : isFilterOpen
+                                ? 'border-slate-700 bg-slate-700 text-slate-200'
+                                : 'border-slate-700 bg-slate-800/50 hover:bg-slate-800/80 text-slate-400'
+                    }`}
+                    title="按难度 / 谱师 / 曲师筛选"
+                    aria-haspopup="true"
+                    aria-expanded={isFilterOpen}
+                >
+                    <FunnelIcon className="w-6 h-6" />
+                    <span className="sr-only">筛选选项</span>
+                    {activeFilterCount > 0 && (
+                        <span
+                            className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-brand-cyan text-slate-900 text-[11px] font-bold flex items-center justify-center"
+                            aria-hidden="true"
+                        >
+                            {activeFilterCount}
+                        </span>
+                    )}
+                </button>
+
+                {isFilterOpen && (
+                    <div className="motion-dropdown absolute right-0 z-50 mt-2 w-72 rounded-xl border border-slate-700 bg-slate-800 shadow-2xl overflow-hidden">
+                        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700">
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">筛选</span>
+                            {activeFilterCount > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setFilters(emptyQuickFilters)}
+                                    className="text-xs text-slate-400 hover:text-brand-cyan flex items-center gap-1"
+                                >
+                                    <XMarkIcon className="w-3.5 h-3.5" />
+                                    清除
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="p-3 space-y-3 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                            {/* 难度 */}
+                            <div>
+                                <div className="px-1 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                    必须含难度
+                                </div>
+                                <div className="flex gap-1.5 mt-1">
+                                    {DIFFS.map(d => (
+                                        <button
+                                            key={d}
+                                            type="button"
+                                            onClick={() => toggleDiffFilter(d)}
+                                            className={`flex-1 py-1.5 text-xs font-semibold rounded-md border transition-colors ${
+                                                filters.requireDiffs.includes(d)
+                                                    ? 'border-brand-cyan text-brand-cyan bg-brand-cyan/10'
+                                                    : 'border-slate-600 text-slate-400 hover:border-slate-500'
+                                            }`}
+                                        >
+                                            {d}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 指定定数 */}
+                            <div>
+                                <div className="px-1 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                    指定定数
+                                </div>
+                                <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={filters.levels}
+                                    onChange={e => setFilter('levels', e.target.value)}
+                                    placeholder="如 17、17.6、15.3"
+                                    className="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-cyan"
+                                />
+                                <p className="text-[11px] text-slate-600 mt-1 px-1">
+                                    精确定数，可带小数也可不带；多个用逗号分隔，如 15.3, 17.6
+                                </p>
+                            </div>
+
+                            {/* 定数区间 */}
+                            <div>
+                                <div className="px-1 py-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                    定数区间
+                                </div>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <input
+                                        type="number"
+                                        inputMode="decimal"
+                                        value={filters.levelMin}
+                                        onChange={e => setFilter('levelMin', e.target.value)}
+                                        placeholder="最低"
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-cyan"
+                                    />
+                                    <span className="text-slate-600 text-xs flex-shrink-0">~</span>
+                                    <input
+                                        type="number"
+                                        inputMode="decimal"
+                                        value={filters.levelMax}
+                                        onChange={e => setFilter('levelMax', e.target.value)}
+                                        placeholder="最高"
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-brand-cyan"
+                                    />
+                                </div>
+                                <p className="text-[11px] text-slate-600 mt-1 px-1">
+                                    任一难度落在区间内即命中；与「指定定数」同时填写时需两者都满足
+                                </p>
+                            </div>
+
+                            {/* 谱师 */}
+                            <div>
+                                <div className="flex items-center justify-between px-1 py-1">
+                                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                        谱师
+                                    </span>
+                                    <span className="text-[10px] text-slate-600">
+                                        共 {charterOptions.length} 位
+                                    </span>
+                                </div>
+                                <div className="mt-1">
+                                    <NameCombobox
+                                        placeholder="输入或选择谱师"
+                                        options={charterOptions}
+                                        value={filters.charter}
+                                        onChange={v => setFilter('charter', v)}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* 曲师 */}
+                            <div>
+                                <div className="flex items-center justify-between px-1 py-1">
+                                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                        曲师
+                                    </span>
+                                    <span className="text-[10px] text-slate-600">
+                                        共 {composerOptions.length} 位
+                                    </span>
+                                </div>
+                                <div className="mt-1">
+                                    <NameCombobox
+                                        placeholder="输入或选择曲师"
+                                        options={composerOptions}
+                                        value={filters.composer}
+                                        onChange={v => setFilter('composer', v)}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="px-3 py-2 border-t border-slate-700 text-xs text-slate-500">
+                            命中 <span className="text-brand-cyan font-semibold">{filteredSongs.length}</span> / {songs.length} 首
+                        </div>
+                    </div>
+                )}
             </div>
 
-            <div ref={parentRef} role="listbox" aria-label="曲目列表" className="flex-1 min-h-0 overflow-y-auto thin-scroll px-2 py-2">
-                {renderList()}
+            <div ref={sortWrapperRef} className="relative">
+                <button
+                    type="button"
+                    onClick={() => setIsSortOpen(!isSortOpen)}
+                    className={`flex items-center justify-center w-14 h-14 rounded-xl border border-slate-700 shadow-lg backdrop-blur-sm transition-colors duration-200 flex-shrink-0 ${isSortOpen ? 'bg-slate-700 text-slate-200' : 'bg-slate-800/50 hover:bg-slate-800/80 text-slate-400'}`}
+                    title="排序选项"
+                    aria-haspopup="true"
+                    aria-expanded={isSortOpen}
+                >
+                    <ArrowsUpDownIcon className="w-6 h-6" />
+                    <span className="sr-only">排序选项</span>
+                </button>
+
+                {isSortOpen && (
+                    <div className="motion-dropdown absolute right-0 z-50 mt-2 w-48 rounded-xl border border-slate-700 bg-slate-800 shadow-2xl overflow-hidden">
+                        <div className="py-1">
+                            <div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                排序方式
+                            </div>
+                            <button
+                                onClick={() => handleSortTypeChange('alphanumerical')}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center justify-between transition-colors duration-150"
+                            >
+                                <span>字母数字排序</span>
+                                {sortConfig.type === 'alphanumerical' && <CheckIcon className="w-4 h-4 text-brand-cyan" />}
+                            </button>
+                            <button
+                                onClick={() => handleSortTypeChange('unsorted')}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center justify-between transition-colors duration-150"
+                            >
+                                <span>不排序</span>
+                                {sortConfig.type === 'unsorted' && <CheckIcon className="w-4 h-4 text-brand-cyan" />}
+                            </button>
+                            
+                            <div className="my-1 border-t border-slate-700"></div>
+                            
+                            <div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                顺序
+                            </div>
+                            <button
+                                onClick={() => handleSortDirectionChange('asc')}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center justify-between transition-colors duration-150"
+                            >
+                                <span>升序</span>
+                                {sortConfig.direction === 'asc' && <CheckIcon className="w-4 h-4 text-brand-cyan" />}
+                            </button>
+                            <button
+                                onClick={() => handleSortDirectionChange('desc')}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-white flex items-center justify-between transition-colors duration-150"
+                            >
+                                <span>降序</span>
+                                {sortConfig.direction === 'desc' && <CheckIcon className="w-4 h-4 text-brand-cyan" />}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

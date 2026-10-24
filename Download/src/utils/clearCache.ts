@@ -13,15 +13,15 @@
  * 清理后要保留的 localStorage key。
  *
  * - access_token：答题凭证，保留 = 清完不用重新答题
- * - phigrosDownloader_settings_v2：设置项，内含当前加速源。
- *   不保留的话清完会掉回 GitHub 直连，国内用户速度直接崩，还得手动再选一次。
- * - pcd_dns_selected：用户选的 DNS / 线路偏好
+ * - pcd_source_selected：用户选的加速源。不保留的话清完会掉回 GitHub 直连，
+ *   国内用户速度直接崩，还得手动再选一次 —— 这是要避免的。
+ * - pcd_dns_selected：同理，用户选的 DNS / 线路偏好
  * - pcd_cache_epoch：CDN 缓存版本号。清缓存时会被 bump 成新值来强制 CDN 回源，
  *   删掉它就白 bump 了，所以必须留下。
  */
 export const KEEP_STORAGE_KEYS: string[] = [
     'access_token',
-    'phigrosDownloader_settings_v2',
+    'pcd_source_selected',
     'pcd_dns_selected',
     'pcd_cache_epoch',
 ];

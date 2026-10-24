@@ -2,8 +2,7 @@
 // 卡片与批量下载共用同一套逻辑，避免两处各写一份。
 
 import { Song } from '../types';
-import { getResourceUrl, ProxySource } from './resourceUrls';
-import { resourceFetch } from './githubAuth';
+import { ghRaw } from './sources';
 import { levelOf } from './shareCard';
 
 export interface ChartStats {
@@ -33,12 +32,11 @@ export function primaryDifficulty(song: Song): string | null {
 export async function fetchChartStats(
     songId: string,
     diff: string,
-    proxySource: ProxySource = 'github',
     signal?: AbortSignal
 ): Promise<ChartStats | null> {
     try {
-        const url = getResourceUrl(proxySource, 'chart', `${songId}.0/${diff}.json`);
-        const res = await resourceFetch(url, { cache: 'no-store', signal });
+        const url = ghRaw(`7aGiven/Phigros_Resource/refs/heads/chart/${songId}.0/${diff}.json`);
+        const res = await fetch(url, { cache: 'no-store', signal });
         if (!res.ok) return null;
         const data = await res.json();
         const lines = data?.judgeLineList;
@@ -110,10 +108,9 @@ export async function scanChartStats(
         concurrency?: number;
         onProgress?: (p: ScanProgress) => void;
         signal?: AbortSignal;
-        proxySource?: ProxySource;
     } = {}
 ): Promise<Map<string, ChartStats>> {
-    const { concurrency = 6, onProgress, signal, proxySource = 'github' } = opts;
+    const { concurrency = 6, onProgress, signal } = opts;
     const map = new Map<string, ChartStats>();
     let done = 0;
 
@@ -124,7 +121,7 @@ export async function scanChartStats(
             if (signal?.aborted) return;
             const diff = primaryDifficulty(song);
             if (!diff) return;
-            const stats = await fetchChartStats(song.id, diff, proxySource, signal);
+            const stats = await fetchChartStats(song.id, diff, signal);
             if (stats) map.set(song.id, stats);
             done++;
             onProgress?.({ done, total: songs.length });

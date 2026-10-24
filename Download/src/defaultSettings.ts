@@ -1,28 +1,20 @@
-import { ProxySource } from './utils/resourceUrls';
 
 export interface Settings {
     useZipFormat: boolean;
     includeInfoYml: boolean;
-    analyticsEnabled: boolean;
+    disableDiscordNotifications: boolean;
     exportIllustrationType: 'full' | 'blur';
-    chartFormatConversion: 'none' | 'rpe';
-    chartEasingFitting: boolean;
     useNewUi: boolean;
-    proxySource: ProxySource;
-    githubToken: string;
     // New UI Sub-settings
     newUiAudioPreview: boolean;
     newUiAudioVolume: number;
     newUiLoopAudio: boolean;
-    newUiAutoplayAudio: boolean;
-    newUiBlur: boolean;
     newUiShowVisualizer: boolean;
     newUiVisualizerColor: string;
     newUiVisualizerHeight: number;
     newUiVisualizerOpacity: number;
     newUiSongSpecificEffects: boolean;
     bulkDownloadMode: boolean;
-    advancedInfo: boolean;
     // 分享卡片
     shareCardEnabled: boolean;
     shareCardBpm: boolean;
@@ -34,25 +26,18 @@ export interface Settings {
 export const defaultSettings: Settings = {
     useZipFormat: false,
     includeInfoYml: true,
-    analyticsEnabled: true,
+    disableDiscordNotifications: false,
     exportIllustrationType: 'full',
-    chartFormatConversion: 'none',
-    chartEasingFitting: true,
     useNewUi: true,
-    proxySource: 'github',
-    githubToken: '',
-    newUiAudioPreview: true,
+    newUiAudioPreview: false,
     newUiAudioVolume: 1,
     newUiLoopAudio: true,
-    newUiAutoplayAudio: false,
-    newUiBlur: false,
     newUiShowVisualizer: true,
-    newUiVisualizerColor: 'gray',
+    newUiVisualizerColor: 'gray', // slate-200
     newUiVisualizerHeight: 60,
     newUiVisualizerOpacity: 60,
     newUiSongSpecificEffects: false,
     bulkDownloadMode: false,
-    advancedInfo: false,
     shareCardEnabled: true,
     shareCardBpm: true,
     shareCardJudgeLines: true,

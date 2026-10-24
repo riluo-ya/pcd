@@ -15,11 +15,21 @@ import {
     DIFF_COLOR,
 } from '../utils/bulkFilters';
 import { ChartStats, scanChartStats } from '../utils/chartStats';
-import { getResourceUrl } from '../utils/resourceUrls';
 import { useSettings } from '../contexts/SettingsContext';
 import { exportBulkAssets } from '../utils/export';
 import type { FailedFile } from '../worker/export.worker';
-import { levelOf } from '../utils/shareCard';
+import { NoticeDialog, ConfirmDialog, Button, ErrorBody } from './ui/Dialog';
+
+/** 自绘确认框的待确认内容 */
+interface ConfirmState {
+    tone?: 'info' | 'warning' | 'error';
+    eyebrow: string;
+    title: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    onConfirm: () => void;
+    body: React.ReactNode;
+}
 
 // ================= 小组件 =================
 
@@ -107,13 +117,6 @@ const ChipToggle: React.FC<{
 
 // ================= 主组件 =================
 
-interface BulkDownloadPanelProps {
-    songs: Song[];
-    isLoading: boolean;
-    error: string | null;
-    onExit: () => void;
-}
-
 export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isLoading, error, onExit }) => {
     // 打包谱面包时需要用到导出格式（.pez / .zip）与是否附带 info.yml
     const { settings } = useSettings();
@@ -144,6 +147,9 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
     } | null>(null);
     const [result, setResult] = useState<{ failed: FailedFile[]; cancelled: boolean } | null>(null);
     const abortRef = useRef<AbortController | null>(null);
+    // 自绘弹窗：替代 window.alert / window.confirm
+    const [errorDialog, setErrorDialog] = useState<{ message: string; detail: string } | null>(null);
+    const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
     const listRef = useRef<HTMLDivElement>(null);
 
@@ -183,7 +189,6 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
         scanChartStats(baseFiltered, {
             signal: ctrl.signal,
             onProgress: p => setScanProgress(p),
-            proxySource: settings.proxySource,
         })
             .then(map => {
                 if (ctrl.signal.aborted) return;
@@ -198,8 +203,7 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
         return () => {
             ctrl.abort();
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filters.useChartStats, baseSig, baseFiltered, settings.proxySource]);
+    }, [filters.useChartStats, baseSig, baseFiltered]);
 
     // 曲目被筛掉后，把不再可见的选中的也清掉，避免「看不见却会下载」
     useEffect(() => {
@@ -289,7 +293,6 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
                 const failed = await exportBulkAssets(
                     chunk,
                     delaySec,
-                    settings.proxySource,
                     (currentFile, action, songsLeft, percent) =>
                         setProgress({
                             currentFile,
@@ -314,7 +317,10 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
             } else {
                 console.error('[bulk] 导出失败', e);
                 setResult({ failed: [], cancelled: false });
-                window.alert('批量导出过程中发生错误，请查看控制台获取详情。');
+                setErrorDialog({
+                    message: '批量导出中断了。已下载的谱面不会丢失，可以直接重试失败的那几首。',
+                    detail: e instanceof Error ? (e.stack || e.message) : String(e),
+                });
             }
         } finally {
             setRunning(false);
@@ -322,20 +328,45 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
             abortRef.current = null;
             if (!isRetry) setResult(prev => prev);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [delaySec, songs]);
 
     const handleStart = () => {
         if (selectedSongs.length === 0) return;
-        // 黑名单预检
+        // 黑名单预检：用自绘确认框，问清楚了再开跑
         const risky = selectedSongs.filter(s => blacklistedDiffs(s).length > 0);
         if (risky.length > 0) {
-            const preview = risky.slice(0, 5).map(s => `· ${s.name}`).join('\n');
-            const more = risky.length > 5 ? `\n…等共 ${risky.length} 首` : '';
-            const ok = window.confirm(
-                `选中曲目中有 ${risky.length} 首包含已知会导致 Phira 无响应的谱面：\n\n${preview}${more}\n\n继续下载？建议回到筛选勾选「排除黑名单曲目」。`
-            );
-            if (!ok) return;
+            const preview = risky.slice(0, 5).map(s => s.name);
+            const more = risky.length > 5 ? risky.length - 5 : 0;
+            setConfirm({
+                tone: 'warning',
+                eyebrow: 'BLACKLISTED CHARTS',
+                title: `${risky.length} 首包含问题谱面`,
+                confirmLabel: '仍然继续',
+                cancelLabel: '返回检查',
+                onConfirm: () => {
+                    setConfirm(null);
+                    void runExport(batches, false);
+                },
+                body: (
+                    <>
+                        <p className="text-[13px] leading-[1.6] text-slate-300">
+                            这些曲目里有已知会导致 Phira 无响应的谱面。继续的话它们会被一起打包，
+                            导入后可能卡住；建议回到筛选里勾选「排除黑名单曲目」。
+                        </p>
+                        <ul className="mt-2 flex flex-col gap-1">
+                            {preview.map(n => (
+                                <li key={n} className="text-[12px] text-slate-400">
+                                    · {n}
+                                </li>
+                            ))}
+                        </ul>
+                        {more > 0 && (
+                            <p className="mt-1 text-[12px] text-slate-500">…等共 {risky.length} 首</p>
+                        )}
+                    </>
+                ),
+            });
+            return;
         }
         void runExport(batches, false);
     };
@@ -614,7 +645,7 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
 
                     <div
                         ref={listRef}
-                        className="h-[min(30rem,45vh)] min-h-[14rem] overflow-y-auto custom-scrollbar rounded-lg border border-slate-700/60 bg-slate-900/50"
+                        className="h-64 overflow-y-auto custom-scrollbar rounded-lg border border-slate-700/60 bg-slate-900/50"
                     >
                         {finalSongs.length === 0 ? (
                             <div className="flex items-center justify-center h-full text-sm text-slate-500">
@@ -858,6 +889,36 @@ export const BulkDownloadPanel: React.FC<BulkDownloadPanelProps> = ({ songs, isL
                     </div>
                 )}
             </div>
+
+            {confirm && (
+                <ConfirmDialog
+                    tone={confirm.tone}
+                    eyebrow={confirm.eyebrow}
+                    title={confirm.title}
+                    confirmLabel={confirm.confirmLabel}
+                    cancelLabel={confirm.cancelLabel}
+                    onConfirm={confirm.onConfirm}
+                    onCancel={() => setConfirm(null)}
+                >
+                    {confirm.body}
+                </ConfirmDialog>
+            )}
+
+            {errorDialog && (
+                <NoticeDialog
+                    tone="error"
+                    eyebrow="BULK EXPORT ERROR"
+                    title="批量导出失败"
+                    onClose={() => setErrorDialog(null)}
+                    actions={
+                        <Button variant="danger" onClick={() => setErrorDialog(null)}>
+                            知道了
+                        </Button>
+                    }
+                >
+                    <ErrorBody message={errorDialog.message} detail={errorDialog.detail} />
+                </NoticeDialog>
+            )}
         </div>
     );
 };

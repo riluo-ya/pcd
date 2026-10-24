@@ -77,7 +77,35 @@ function textToHtml(str: string): string {
     if (lines.length === 1) return `<p>${escapeHtml(lines[0])}</p>`;
 
     const lis = lines.map((l) => `<li>${escapeHtml(l)}</li>`).join('');
-    return `<ul class="list-disc list-inside space-y-1">${lis}</ul>`;
+    // 没有子项就保持原来的单层列表
+    if (!lines.some((l) => l.startsWith('- '))) {
+        return `<ul class="list-disc list-inside space-y-1">${lis}</ul>`;
+    }
+
+    /**
+     * 支持二级结构：普通行是分组标题，紧随其后以「- 」开头的行是它的子项。
+     * 这样日志只写纯文本也能排出层次，不用手写 HTML —— 多行日志往往
+     * 塞了十几条改动，全平级会糊成一片，看不出哪些属于同一块。
+     */
+    let html = '';
+    let inGroup = false;
+    for (const line of lines) {
+        if (line.startsWith('- ')) {
+            if (!inGroup) {
+                html += '<ul class="list-disc list-inside space-y-1 ml-5 mt-1 text-slate-400">';
+                inGroup = true;
+            }
+            html += `<li>${escapeHtml(line.slice(2))}</li>`;
+        } else {
+            if (inGroup) {
+                html += '</ul>';
+                inGroup = false;
+            }
+            html += `<p class="font-semibold text-slate-200 mt-3 first:mt-0">${escapeHtml(line)}</p>`;
+        }
+    }
+    if (inGroup) html += '</ul>';
+    return html;
 }
 
 /** 把 JSON 里的 content 渲染成安全的 HTML */

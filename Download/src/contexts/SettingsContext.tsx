@@ -1,7 +1,6 @@
 
 import React, { createContext, useState, useEffect, ReactNode, useContext } from 'react';
 import { Settings, defaultSettings } from '../defaultSettings';
-import { setGithubToken } from '../utils/githubAuth';
 
 const SETTINGS_STORAGE_KEY = 'phigrosDownloader_settings_v2';
 
@@ -16,15 +15,12 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     const [settings, setSettings] = useState<Settings>(() => {
         try {
             const storedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
-            return storedSettings ? { ...defaultSettings, ...JSON.parse(storedSettings), useNewUi: true } : defaultSettings;
+            return storedSettings ? { ...defaultSettings, ...JSON.parse(storedSettings) } : defaultSettings;
         } catch (error) {
             console.error('Error reading settings from localStorage', error);
             return defaultSettings;
         }
     });
-
-    // Applied during render so it is set before any child effect issues a request.
-    setGithubToken(settings.githubToken);
 
     useEffect(() => {
         try {
