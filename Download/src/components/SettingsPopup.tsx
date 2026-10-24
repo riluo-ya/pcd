@@ -203,8 +203,11 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({ isOpen, onClose })
             aria-modal="true"
             onClick={onClose}
         >
+            {/* 面板必须是 flex 列：内容区靠 flex-1 min-h-0 才能滚动。
+                缺了 flex flex-col，flex-1 失效，而面板是 overflow-hidden + 手机端固定高度，
+                内容溢出会被直接裁掉且滚不动。「关于」「常见问题」都有这一项，别再删。 */}
             <div 
-                className={`motion-dialog relative w-full max-w-md mx-auto overflow-hidden rounded-2xl border border-white/[.08] bg-[rgba(12,15,22,.97)] shadow-[0_40px_120px_rgba(0,0,0,.6)] text-left transform transition-all max-md:w-full max-md:max-w-none h-dialog-panel max-md:rounded-b-none max-md:border-b-0 ${
+                className={`motion-dialog relative w-full max-w-md mx-auto overflow-hidden rounded-2xl border border-white/[.08] bg-[rgba(12,15,22,.97)] shadow-[0_40px_120px_rgba(0,0,0,.6)] text-left transform transition-all flex flex-col max-md:w-full max-md:max-w-none h-dialog-panel max-md:rounded-b-none max-md:border-b-0 ${
                     settings.useNewUi ? 'backdrop-blur-md' : ''
                 }`}
                 onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
