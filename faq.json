@@ -47,8 +47,8 @@
       }
     },
     {
-      "question": "为什么我的Phira没有“噪域”？",
-      "answer": "目前（20261024）Phira还不支持噪域的渲染，如果你需要噪域效果的话可以试试Phira-Pro这个项目",
+      "question": "“噪域”怎么加载？",
+      "answer": "目前（20261017）Phira还不支持噪域的渲染，如果你需要噪域效果的话可以试试Phira-Pro这个项目",
       "links": [
         {
           "text": "Github",

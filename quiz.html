@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>答题系统</title>
+    <meta name="pcd-quiz-version" content="2026.10.17b">
     <style>
         :root {
             --primary: #4F46E5;
@@ -44,6 +45,10 @@
         .question-card { background: var(--card-bg); border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: var(--shadow-lg); border: 1px solid rgba(255,255,255,0.6); touch-action: manipulation; }
         .q-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 16px; line-height: 1.5; display: flex; gap: 8px; }
         .q-index { color: var(--primary); font-weight: bold; }
+        /* 题目属性小框：置于题号上方，低调不抢眼 */
+        .src-badge { display: inline-block; font-size: 0.62rem; font-weight: 600; padding: 1px 7px; border-radius: 4px; line-height: 1.7; letter-spacing: .04em; margin-bottom: 10px; }
+        .src-badge.builtin { color: #9aa4b2; background: #f4f6f9; border: 1px solid #e6eaf0; }
+        .src-badge.contribute { color: #a1761f; background: #fdf8ec; border: 1px solid #f0e4c8; }
         .options-grid { display: grid; gap: 12px; }
         .option-item { display: flex; align-items: center; padding: 14px 16px; border: 2px solid var(--border-color); border-radius: 12px; cursor: pointer; transition: all 0.2s ease; background: white; }
         .option-item:hover { border-color: var(--primary); background: #f9fafb; }
@@ -241,30 +246,7 @@
         // 允许回跳的页面（新增受保护页面时记得同步这里）。
         // 用白名单而不是「同源即可」，是因为任意字符串都会被 URL 解析成同源相对路径，
         // 放行的话会把用户送到一个不存在的地址上。
-        //
-        // 这里按「路径后缀」匹配而不是只取最后一段文件名：
-        // /signal/ 这类子目录页面的最后一段是空字符串，只比文件名会把它误判成站点根，
-        // 从而被下面的 shouldReturnTo 当成下载站首页、答完题送去导航中心。
-        const ALLOWED_SUFFIXES = [
-            '/index.html', '/home.html', '/philzy.html', '/pmth.html',
-            '/signal/', '/signal/index.html'
-        ];
-
-        /** 规范成以 / 开头的路径 */
-        function normalizePath(p) {
-            let v = String(p || '/');
-            if (v.charAt(0) !== '/') v = '/' + v;
-            return v;
-        }
-
-        /** 是否是可信的回跳路径：站点根，或命中白名单后缀 */
-        function isAllowedPath(p) {
-            const np = normalizePath(p);
-            if (np === '/') return true;
-            return ALLOWED_SUFFIXES.some(function (sf) {
-                return np === sf || np.slice(-sf.length) === sf;
-            });
-        }
+        const ALLOWED_PATHS = ['', 'index.html', 'home.html', 'philzy.html', 'pmth.html'];
 
         /**
          * 校验返回地址是否可信：
@@ -282,17 +264,15 @@
             }
             if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
             if (url.origin !== location.origin) return null;
-            if (!isAllowedPath(url.pathname)) return null;
+            const file = url.pathname.split('/').pop();
+            if (ALLOWED_PATHS.indexOf(file) === -1) return null;
             return url.href;
         }
 
-        /** 判断一个地址是不是下载站首页（站点根，或根下的 index.html） */
+        /** 判断一个地址是不是下载站首页（根路径或 index.html） */
         function isDownloaderUrl(url) {
-            const np = normalizePath(url.pathname);
-            if (np === '/') return true;
-            // /signal/ 是另一个工具页，不是下载站首页，别把它算进去
-            if (/\/signal\/?$/i.test(np)) return false;
-            return np.slice(-'/index.html'.length) === '/index.html' && !/\/signal\//i.test(np);
+            const file = url.pathname.split('/').pop();
+            return file === '' || file === 'index.html';
         }
 
         /**
@@ -331,9 +311,6 @@
             try {
                 const u = new URL(url, location.href);
                 const file = u.pathname.split('/').pop();
-                // /signal/ 与 /signal/index.html 的最后一段分别是空串和 index.html，
-                // 与「站点根 / 根下 index.html」撞车，所以必须放在最前面先判掉
-                if (/\/signal(\/index\.html)?\/?$/i.test(u.pathname)) return 'SIGNAL 演出工具';
                 if (!file || file === 'index.html') return '谱面下载器';
                 if (file === 'home.html') return '导航中心';
                 if (file === 'philzy.html') return '蓝奏云下载页';
@@ -652,7 +629,12 @@
                 } catch (e) {}
             }
 
-            currentQuestions = config.questions.map(q => ({ ...q, renderedOptions: q.renderedOptions }));
+            currentQuestions = config.questions.map(q => ({
+                ...q,
+                // 老缓存里没有 source，这里补齐，保证徽标一定有值可显示
+                source: (q && q.source === 'contribute') ? 'contribute' : 'builtin',
+                renderedOptions: q.renderedOptions,
+            }));
             renderQuestions();
 
             document.getElementById('session-info-bar').style.display = 'flex';
@@ -722,7 +704,12 @@
             currentQuestions.forEach((q, index) => {
                 const card = document.createElement('div');
                 card.className = 'question-card';
-                const titleHtml = `<div class="q-title"><span class="q-index">${String.fromCharCode(65 + index)}.</span> ${escapeHtml(q.title)}</div>`;
+                // 题目属性：source 为 contribute 时显示「投稿」，其余（含老数据）显示「内置」
+                // 无论内置还是投稿都要展示；字段缺失/异常一律按「内置」兜底
+                const srcBadge = (q && q.source === 'contribute')
+                    ? '<span class="src-badge contribute">投稿</span>'
+                    : '<span class="src-badge builtin">内置</span>';
+                const titleHtml = `${srcBadge}<div class="q-title"><span class="q-index">${String.fromCharCode(65 + index)}.</span> <span>${escapeHtml(q.title)}</span></div>`;
                 let optionsHtml = '<div class="options-grid">';
                 q.renderedOptions.forEach((opt, optIndex) => {
                     const letter = String.fromCharCode(65 + optIndex);

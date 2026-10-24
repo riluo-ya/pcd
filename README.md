@@ -1,6 +1,6 @@
 # PCD —— Phigros 谱面下载与工具集
 
-PCD 是一个 Phigros 谱面下载站，附带答题验证、导航中心、网盘索引、谱面工坊与 SIGNAL 演出工具等入口。
+PCD 是一个 Phigros 谱面下载站，附带答题验证、导航中心、网盘索引与谱面工坊等入口。
 谱面、曲绘、音频统一从上游公开仓库拉取，本地只做索引、筛选与打包。
 
 - 在线地址：https://pcd.bot.cd/
@@ -20,6 +20,7 @@ PCD 是一个 Phigros 谱面下载站，附带答题验证、导航中心、网�
   - [批量下载](#批量下载)
   - [分享卡片](#分享卡片)
   - [设置项](#设置项)
+- [与上游项目的关系](#与上游项目的关系)
 - [上游数据来源](#上游数据来源)
 - [本地开发](#本地开发)
 - [部署](#部署)
@@ -50,7 +51,6 @@ pcd/
 ├── home.html                   # 导航中心：各工具入口
 ├── philzy.html                 # 蓝奏云网盘下载索引
 ├── pmth.html                   # Phigros Chart Studio 谱面工坊
-├── signal/                     # SIGNAL 演出工具（第三方项目二改，见 signal/ATTRIBUTION.md）
 ├── pcd.data                    # 加密题库（答题页读取）
 ├── dl.data                     # 导航中心数据（加密）
 ├── lz.data                     # 蓝奏云数据（加密）
@@ -61,50 +61,70 @@ pcd/
     ├── index.html
     ├── vite.config.ts
     ├── package.json
+    ├── copy-static.mjs         # 把根目录页面/数据复制进 dist
     └── src/
-        ├── App.tsx             # 主界面
-        ├── index.tsx           # 入口
+        ├── App.tsx             # 主界面（桌面双栏 / 移动端布局）
+        ├── index.tsx           # 入口（挂 AuthGate + 各 Provider）
         ├── index.css           # Tailwind + 动效样式
         ├── types.ts            # Song / FileInfo 类型
         ├── defaultSettings.ts  # 设置项与默认值
         ├── blacklist.ts        # 问题谱面名单
+        ├── extraCharts.ts      # 元数据未收录的额外谱面（如 SP）
+        ├── patchedCharts.ts    # 修复版谱面索引
         ├── song-aliases.ts     # 曲名别名（搜索用）
         ├── song-effects.ts     # 曲目特效映射
-        ├── aboutData.ts        # 关于页内容
-        ├── faqData.ts          # 常见问题内容
+        ├── aboutData.ts        # 关于页内容与更新日志
+        ├── faqData.ts          # 常见问题（内置兜底）
         ├── contexts/
-        │   └── SettingsContext.tsx
+        │   ├── SettingsContext.tsx
+        │   └── ResourceErrorContext.tsx   # 资源错误集中上报与重试
+        ├── hooks/
+        │   ├── useIsMobile.ts
+        │   ├── useSongFiles.ts
+        │   └── useSongFilter.ts
         ├── components/
         │   ├── AuthGate.tsx              # 凭证校验与受限页
-        │   ├── SongSelector.tsx          # 选歌 + 筛选漏斗
-        │   ├── NameCombobox.tsx          # 谱师/曲师组合框
-        │   ├── DifficultySelector.tsx    # 难度选择
+        │   ├── SongSelector.tsx          # 曲库列表 + 搜索 / 排序 / 定数筛选
+        │   ├── SongWorkspace.tsx         # 谱面工作区（右侧详情）
+        │   ├── DifficultySelector.tsx    # 难度选择 + 体积预估
         │   ├── FileTable.tsx             # 资源清单
-        │   ├── BulkDownloadPanel.tsx     # 批量下载面板
+        │   ├── BulkDownloadPanel.tsx     # 批量下载面板（本站增强版）
         │   ├── ShareCardPopup.tsx        # 分享卡片弹窗
         │   ├── SettingsPopup.tsx         # 设置弹窗
         │   ├── SourcePopup.tsx           # 加速源切换
+        │   ├── DnsPopup.tsx              # 线路说明
         │   ├── AudioPlayerControl.tsx    # 音频预览
-        │   ├── AudioVisualizer.tsx       # 可视化
+        │   ├── AudioVisualizer.tsx       # 频谱可视化
         │   ├── SongEffectRenderer.tsx    # 曲目特效
+        │   ├── PatchedChartPopup.tsx     # 修复版谱面提示
+        │   ├── ResourceErrorPopup.tsx    # 资源错误提示
+        │   ├── InstructionPopup.tsx      # 首次导出须知
         │   ├── VersionCard.tsx / Header.tsx / Spinner.tsx
         │   ├── AboutPopup.tsx / FAQPopup.tsx
         │   ├── BlacklistWarningPopup.tsx / AssetDownloadWarningPopup.tsx
-        │   ├── ClearCacheButton.tsx
-        │   ├── Icons.tsx
-        │   └── effects/                  # 曲目特效：碎裂、碎片、烟花、
-        │                                 # 故障、叠层、径向光、文字扰动
+        │   ├── ClearCacheButton.tsx / Icons.tsx
+        │   ├── effects/                  # 曲目特效：碎裂、碎片、烟花、
+        │   │                             # 故障、叠层、径向光、文字扰动
+        │   ├── mobile/                   # 手机端专属布局
+        │   │   ├── MobileLayout.tsx / MobileLibrary.tsx
+        │   │   └── MobileSongView.tsx / BottomSheet.tsx
+        │   └── ui/Dialog.tsx             # 弹窗基础组件
         ├── utils/
-        │   ├── api.ts          # 曲库拉取
-        │   ├── auth.ts         # 凭证签发与校验
-        │   ├── sources.ts      # 加速源与 CDN 版本号
-        │   ├── export.ts       # 导出（调度 Web Worker）
-        │   ├── shareCard.ts    # 卡片绘制
-        │   ├── chartStats.ts   # 谱面解析（BPM/物量/判定线/时长）
-        │   ├── bulkFilters.ts  # 筛选逻辑
-        │   ├── qrcode.ts       # 二维码生成
-        │   ├── changelog.ts    # 更新记录
-        │   └── clearCache.ts   # 缓存清理
+        │   ├── api.ts           # 曲库 / 版本拉取
+        │   ├── auth.ts          # 凭证签发与校验
+        │   ├── resourceUrls.ts  # 资源地址与加速源
+        │   ├── githubAuth.ts    # 带令牌的资源请求
+        │   ├── export.ts        # 导出（调度 Web Worker）
+        │   ├── exportEstimate.ts# 导出体积预估
+        │   ├── chartConverter.ts# RPE 格式转换
+        │   ├── chartStats.ts    # 谱面解析（BPM/物量/判定线/时长）
+        │   ├── bulkFilters.ts   # 筛选逻辑
+        │   ├── difficulty.ts    # 难度顺序与配色
+        │   ├── qrcode.ts        # 二维码生成
+        │   ├── changelog.ts     # 更新记录（读外部 changelog.json）
+        │   ├── faq.ts           # 常见问题（读外部 faq.json）
+        │   ├── clearCache.ts    # 缓存清理
+        │   └── shareCard.ts     # 卡片绘制
         └── worker/
             └── export.worker.ts # 实际下载与打包（后台线程）
 ```
@@ -121,7 +141,6 @@ pcd/
 | `home.html` | 导航中心，展示各工具入口 |
 | `philzy.html` | 蓝奏云网盘索引 |
 | `pmth.html` | Phigros Chart Studio 谱面工坊：导入谱面，应用规则后导出 |
-| `signal/index.html` | SIGNAL 演出工具：编辑选项与数字，预览动画并导出 PNG 帧序列（**第三方项目二改**） |
 | `/`（下载器） | 谱面下载主站 |
 
 谱面工坊处理用户上传的谱面文件（`.json` / `.zip` / `.pez`），
@@ -167,23 +186,6 @@ Phigros 新版在谱面里新增了 `blockAreaList`（噪域）：按两个对�
 | 删除所有噪域 | 输出干净谱面 |
 
 谱面列表会显示每张的噪域数量，下拉下方显示构成（遮挡 / 挖洞各多少）与覆盖时间跨度。
-
-「谱面统计」卡片底部还有一块噪域概览：总数、遮挡/挖洞的构成条、
-以及覆盖的时间跨度（m:ss）。没有噪域时显示「当前谱面没有噪域」。
-
-**界面控件的一致性**
-
-工坊里的下拉与复选框都是自绘的，不用浏览器原生控件 —— 原生 select 在手机端会
-弹出系统控件、桌面端各浏览器渲染也不一致，深色界面里很跳；原生 checkbox 是白底
-方块，同样违和。
-
-自绘下拉保留原生 `select` 作为数据源（加 `.cmb-src` 隐藏），只替换外观 ——
-读 `.value`、监听 `change` 的既有代码都不用改。禁用项（`option.disabled`，
-规则行靠它避免 `from == to` 的无意义映射）在自绘下拉里同样不可点。
-
-面板里的行、提示、输入框统一用 `.mo-row` / `.mo-tip` / `.mo-field`，
-色值全部走 CSS 变量。这些样式原先挂在 `.merge-opts` 前缀下，
-导致批量面板用同样的类名却拿不到样式、只能靠内联 style 硬凑另一套颜色。
 
 > 噪域需要 `formatVersion >= 3`。若主谱面是老版本而整合时合并进了噪域，
 > 工坊会自动把版本升到 3 —— 否则版本号还是旧值，Phira 认不出 `blockAreaList`。
@@ -259,8 +261,7 @@ Exoplanetary Mirage_AT.pez
 安全与可靠性上的几条约束：
 
 - **只看当前链接的 `?return_to=`，不读写任何本地存储**。地址栏里没有就当作没有，不会出现残留的跳转目标。
-- **白名单校验**：只接受同源且属于白名单页面（`index.html` / `home.html` / `philzy.html` / `pmth.html` / `signal/`）的返回地址，答题页自身排除在外，避免「弹回 → 答完 → 再弹回」死循环。
-  白名单按**路径后缀**匹配：`signal/` 这类子目录页面的最后一段文件名是空串，只比文件名会把它误判成站点根。
+- **白名单校验**：只接受同源且属于白名单页面（`index.html` / `home.html` / `philzy.html` / `pmth.html`）的返回地址，答题页自身排除在外，避免「弹回 → 答完 → 再弹回」死循环。
 - 新增受保护页面时，需同步答题页里的 `ALLOWED_PATHS`。
 
 ---
@@ -368,6 +369,19 @@ Exoplanetary Mirage_AT.pez
 
 GitHub 有非官方限流（约 5000 次/小时），建议保留 0.5 秒以上的歌曲间延迟。
 
+### 答题题库
+
+题库加密存放在根目录 `pcd.data`，由「数据管理工具」编辑（见下）。
+每道题目除 `id / title / options / answerText` 外，还有 `source` 属性：
+
+| 值 | 显示 | 含义 |
+|---|---|---|
+| `builtin` | 内置 | 本站自带题目（缺省值，老数据没有该字段时按它处理） |
+| `contribute` | 投稿 | 来自玩家投稿的题目 |
+
+答题页会在题号旁显示对应徽标（内置为灰色，投稿为琥珀色）；
+管理工具里每题右上角可切换，卡片左侧会有琥珀色竖条标记投稿题。
+
 ### 分享卡片
 
 选中曲目后可生成 1080×1440 的分享图，内容包含曲绘、曲名、曲师、
@@ -380,6 +394,9 @@ GitHub 有非官方限流（约 5000 次/小时），建议保留 0.5 秒以上�
 
 卡片上的可选项（BPM / 判定线 / 时长 / 各难度物量）在设置里独立开关，
 全部关闭时无需解析谱面，打开即出图。
+
+绘制分阶段进行（背景 → 品牌条 → 曲绘 → 曲名 → 曲目数据 → 难度条 → 页脚二维码），
+界面实时显示当前步骤与百分比，不必干等。
 
 ### 设置项
 
@@ -414,22 +431,39 @@ sessionStorage，但**保留**登录凭证、已选加速源与 CDN 版本号，
 
 ---
 
-## 第三方项目：SIGNAL（二次开发）
+## 与上游项目的关系
 
-`signal/` 目录来自 [Lylighte/signal-replica](https://github.com/Lylighte/signal-replica)
-（MIT License），PCD 在其基础上做了二次开发，**原始代码文件保持上游原样未改动**。
+本站以上游项目 [swordalt/phigros-chart-downloader](https://github.com/swordalt/phigros-chart-downloader/)
+为基座，跟随其最新架构，同时保留本站自建功能。
 
-二改内容：
+**跟随上游（与上游保持一致）**
 
-1. 在 `index.html` 注入答题验证闸门（与其它受保护页面同一套算法，12 小时有效）
-2. 页面右下角固定显示来源署名与原仓库链接
-3. 答题页回跳白名单新增 `/signal/`
-4. 导航数据新增指向 `./signal/` 的入口
+| 模块 | 说明 |
+|---|---|
+| 双栏布局 | 曲库列表 + 谱面工作区，取代旧的单页纵向布局 |
+| 手机端布局 | `components/mobile/` 一套移动端专属界面 |
+| Web Worker | 增加 RPE 格式转换、GitHub 令牌鉴权、失败清单 |
+| 资源错误上下文 | 请求失败集中上报，弹窗可一键换源重试 |
+| 修复版谱面 | 已知不可玩谱面给出修复版下载入口 |
+| 额外谱面 | 元数据未收录的谱面（如 SP）单独登记 |
 
-完整的来源、许可证与二改清单见 **`signal/ATTRIBUTION.md`**。MIT 协议要求保留版权
-与许可声明，请勿删除 `signal/LICENSE-SIGNAL.md` 与页面署名。
+**本站保留（上游没有）**
 
-上游更新时只需覆盖原始文件（除 `index.html` 外），再补回两处注入即可。
+| 模块 | 说明 |
+|---|---|
+| 答题鉴权 | `AuthGate` + `utils/auth.ts`，凭证无效时整站拦截 |
+| 批量下载面板 | 增强版：多条件筛选、勾选打包、分批、失败重试 |
+| 分享卡片 | 生成曲目卡片图，可下载 / 复制 |
+| 歌曲特效 | 9 套曲目专属特效 |
+| 频谱可视化 | 随音频实时绘制 |
+| 多加速源 | 含 gh-proxy 等国内线路，可随时切换 |
+| 入口页面 | 答题页、导航中心、蓝奏云索引、谱面工坊 |
+| 返回导航按钮 | 桌面顶栏与手机顶栏各有一个「返回导航」按钮，一键回 `home.html` |
+
+> 升级方式：以上游源码为地基，把上表「本站保留」的部分逐个移植上去，
+> 而不是在旧代码上打补丁 —— 这样上游后续更新仍可继续合并。
+
+---
 
 ## 上游数据来源
 
@@ -449,6 +483,52 @@ sessionStorage，但**保留**登录凭证、已选加速源与 CDN 版本号，
 
 ---
 
+---
+
+## 在线内容（改 JSON 即生效）
+
+「关于」的更新日志与「常见问题」都从外部 JSON 读取，改完推送即可更新，
+不用改代码重新构建：
+
+| 文件 | 位置 | 说明 |
+|---|---|---|
+| `changelog.json` | `Download/public/changelog.json` | 更新日志，支持 `notice` 置顶公告 |
+| `faq.json` | `Download/public/faq.json` | 常见问题，支持 `notice` 与 `link` |
+
+两个文件的读取顺序都是：**本站 → jsDelivr CDN → GitHub Raw**，
+前一个失败自动换下一个；全部失败时回退到代码里内置的内容，页面不会空白。
+
+`faq.json` 格式：
+
+```json
+{
+  "notice": "置顶公告，不需要就留空字符串",
+  "faqs": [
+    { "question": "问题", "answer": "答案" },
+    {
+      "question": "问题",
+      "answer": "答案",
+      "links": [
+        { "text": "链接文字", "url": "https://..." },
+        { "text": "第二个链接", "url": "https://..." }
+      ]
+    }
+  ]
+}
+```
+
+每条问答可挂**多个链接**：`links` 是完整列表，`link` 会被自动填为第一条（兼容旧解析）。
+展开答案后，链接以**小卡片**形式列在正文下方（图标 + 标题 + 域名），不再挤在文字里。
+
+> 地址可以省略协议，加载时会自动补 `https://`；`javascript:` 这类依然会被拦掉。
+> `answer` 为纯文本，换行请用 `\n`。
+
+「常见问题」顶部会显示当前数据来源（本站 / CDN / GitHub / 内置）与条数。
+若显示「内置」，说明三个源都没取到 `faq.json`，请确认文件已推送到
+`Download/public/faq.json` 且已完成部署。
+
+---
+
 ## 本地开发
 
 ### 完整打包预览（推荐，贴近线上）
@@ -456,13 +536,15 @@ sessionStorage，但**保留**登录凭证、已选加速源与 CDN 版本号，
 ```bash
 cd Download
 npm install
-npm run build     # 输出到 Download/dist
+npm run build:full   # 编译，并把根目录页面/数据复制进 Download/dist
 cd dist
 npx serve .
 ```
 
-然后把根目录的 `*.html` 与 `*.data` 复制到 `Download/dist/` 下
-（部署流程里由 CI 完成这步），即可访问：
+`build:full` = `vite build` + `node copy-static.mjs`，
+会一并把 `quiz.html`、`home.html`、`philzy.html`、`pmth.html`、
+三份 `.data`、`CNAME` 与 `jpg/` 复制进 `Download/dist/`，
+产物与线上一致。访问地址：
 
 | 页面 | 地址 |
 |---|---|
@@ -483,54 +565,6 @@ npm run dev       # 端口 3000
 开发模式下只有下载器页面；其余 HTML 页面需放到 `Download/public/` 才能访问。
 
 ---
-
-### 弹窗与提示
-
-全站使用自绘弹窗，不用 `window.alert` / `window.confirm` —— 浏览器原生弹窗是
-系统控件，跟深色界面完全不搭，手机上还会卡住整个页面。
-
-自绘版本位于 `Download/src/components/ui/Dialog.tsx`，提供：
-
-- `NoticeDialog` —— 信息 / 警告 / 错误三种 tone，顶部一条对应色的细线
-- `ConfirmDialog` —— 确认框（批量下载前的黑名单预检用它）
-- `ErrorBody` —— 正文 + 可折叠的技术细节，取代「请查看控制台」
-- `DialogFrame` / `DialogHeader` / `Eyebrow` / `Button` —— 容器与排版件
-
-错误与警告**不会**因点击遮罩关闭，避免误触丢掉提示；Escape 始终可关。
-
-### 分享卡片的两个已知坑
-
-1. **曲绘加载必须带超时**。
-   `<img>` 只有 `onload` / `onerror`，请求挂起时（加速源不可达但连接未断）
-   两个回调都不触发，Promise 永远 pending，卡片就永远停在「正在生成卡片…」。
-   现在每个源最多等 8 秒，超时即按失败处理，用占位图继续生成。
-2. **生成失败要可见**。
-   渲染异常时以前只是静默回到初始态，界面一片空白。现在会显示原因与重试按钮。
-
-## 界面结构
-
-沿用上游 `swordalt/phigros-chart-downloader` 的应用外壳：
-
-```
-h-dvh flex flex-col               全高应用，不随内容滚动
-├── Header  h-14 / #05070a         倾斜青色标记 + 标题 + 版本胶囊 + 导航
-├── main    grid                   桌面 340px 侧栏 + 工作区；窄屏上下分栏
-│   ├── aside   歌曲列表（常驻面板，非下拉）
-│   └── section 工作区（曲名 / 难度 / 文件 / 导出）
-└── footer  min-h-10 / #05070a
-```
-
-关键约定：
-
-- **歌曲列表是常驻面板**，不是下拉。搜索框 42px 常驻顶部，列表撑满剩余高度并虚拟化。
-- **难度选择是四个卡片槽位**（EZ/HD/IN/AT），缺失的难度置灰显示 `N/A` —— 一眼能看出有没有 AT。
-- **导出主按钮** 52px 青底黑字 + `export-glow` 呼吸光晕；次按钮为描边样式。
-- 版本信息在顶栏胶囊里（绿=已加载 / 黄=加载中 / 红=失败可点重试），不再单独占一块卡片。
-- 列表与弹窗内容区统一用 `.thin-scroll` 细滚动条。
-
-配色走 CSS 变量：`--color-panel: rgba(12,15,22,.97)`、`--color-ink: #090b10`、
-强调色 `#22d3ee`。等宽小标签（`font-mono text-[10px] tracking-[.14em] uppercase`）
-用于分组标题与元信息。
 
 ## 部署
 
