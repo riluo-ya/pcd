@@ -186,11 +186,11 @@ export const MobileSongView: React.FC<MobileSongViewProps> = ({
                                     {filesOpen ? '收起' : '展开'}
                                 </span>
                             </button>
-                            {filesOpen && (
-                                <div className="pt-1.5">
-                                    <FileTable selectedSong={song} onFilesFound={onFilesFound} />
-                                </div>
-                            )}
+                            {/* FileTable 负责加载文件并回调难度列表，必须常驻挂载：
+                                折叠时只做视觉隐藏，一旦卸载就再也不会触发加载，难度永远为空。 */}
+                            <div className={`pt-1.5 ${filesOpen ? '' : 'hidden'}`}>
+                                <FileTable selectedSong={song} onFilesFound={onFilesFound} />
+                            </div>
                         </div>
                     </div>
                 )}

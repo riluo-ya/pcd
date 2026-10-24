@@ -1,6 +1,6 @@
 
 import React, { useRef } from 'react';
-import { faqData } from '../faqData';
+import { useFaq, urlHost } from '../utils/faqLoader';
 import { useSettings } from '../contexts/SettingsContext';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
@@ -13,9 +13,10 @@ interface AccordionItemProps {
     question: string;
     children: string;
     isLast: boolean;
+    links?: { text: string; url: string }[];
 }
 
-const AccordionItem: React.FC<AccordionItemProps> = ({ question, children, isLast }) => (
+const AccordionItem: React.FC<AccordionItemProps> = ({ question, children, isLast, links }) => (
     <details className={`group border-b border-slate-700/50 py-4 ${isLast ? 'border-none' : ''}`}>
         <summary className="flex cursor-pointer list-none items-center justify-between font-semibold text-slate-200 hover:text-white">
             {question}
@@ -26,6 +27,26 @@ const AccordionItem: React.FC<AccordionItemProps> = ({ question, children, isLas
             </div>
         </summary>
         <div className="mt-4 text-slate-400" dangerouslySetInnerHTML={{ __html: children }} />
+        {links && links.length > 0 && (
+            <div className="mt-3 flex flex-col gap-2">
+                {links.map((lk, i) => (
+                    <a
+                        key={i}
+                        href={lk.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-slate-700/60 bg-slate-800/40 hover:border-[#22d3ee]/45 hover:bg-[#22d3ee]/[.06] transition-colors"
+                    >
+                        <span className="flex-none w-7 h-7 rounded-md bg-[#22d3ee]/12 flex items-center justify-center text-[13px]">🔗</span>
+                        <span className="flex-1 min-w-0">
+                            <span className="block text-[13px] text-slate-200 truncate">{lk.text}</span>
+                            <span className="block text-[11px] text-slate-500 truncate">{urlHost(lk.url)}</span>
+                        </span>
+                        <span className="flex-none text-slate-500 text-xs">↗</span>
+                    </a>
+                ))}
+            </div>
+        )}
     </details>
 );
 
@@ -33,8 +54,11 @@ export const FAQPopup: React.FC<FAQPopupProps> = ({ isOpen, onClose }) => {
     const { settings } = useSettings();
     const parentRef = useRef<HTMLDivElement>(null);
 
+    // 问答来自外部 faq.json，加载失败自动回退到内置数据
+    const { faqs, notice, sourceLabel, loading, error, reload } = useFaq();
+
     const rowVirtualizer = useVirtualizer({
-        count: faqData.length,
+        count: faqs.length,
         getScrollElement: () => parentRef.current,
         estimateSize: () => 100,
     });
@@ -66,8 +90,30 @@ export const FAQPopup: React.FC<FAQPopupProps> = ({ isOpen, onClose }) => {
                     </button>
                 </div>
 
-                <div 
-                    ref={parentRef} 
+                {(notice || error) && (
+                    <div className="flex-none px-6 max-md:px-5 pt-4">
+                        {notice && (
+                            <div className="px-3 py-2 rounded-lg border border-[#22d3ee]/30 bg-[#22d3ee]/10 text-[13px] text-slate-200">
+                                {notice}
+                            </div>
+                        )}
+                        {error && (
+                            <div className="mt-2 flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-[12px] text-amber-300">
+                                <span className="min-w-0 truncate">{error}</span>
+                                <button
+                                    type="button"
+                                    onClick={reload}
+                                    className="flex-none px-2.5 py-1 rounded-md border border-amber-500/40 hover:bg-amber-500/15 transition-colors"
+                                >
+                                    重试
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                <div
+                    ref={parentRef}
                     className="max-h-[60vh] overflow-y-auto px-6 custom-scrollbar"
                 >
                     <div
@@ -78,7 +124,7 @@ export const FAQPopup: React.FC<FAQPopupProps> = ({ isOpen, onClose }) => {
                         }}
                     >
                         {rowVirtualizer.getVirtualItems().map((virtualItem) => {
-                            const item = faqData[virtualItem.index];
+                            const item = faqs[virtualItem.index];
                             return (
                                 <div
                                     key={virtualItem.key}
@@ -92,11 +138,12 @@ export const FAQPopup: React.FC<FAQPopupProps> = ({ isOpen, onClose }) => {
                                         transform: `translateY(${virtualItem.start}px)`,
                                     }}
                                 >
-                                    <AccordionItem 
-                                        question={item.question} 
-                                        isLast={virtualItem.index === faqData.length - 1}
+                                    <AccordionItem
+                                        question={item.question || '(未填问题)'}
+                                        isLast={virtualItem.index === faqs.length - 1}
+                                        links={item.links}
                                     >
-                                        {item.answer}
+                                        {item.answer || '(未填答案)'}
                                     </AccordionItem>
                                 </div>
                             );
@@ -104,7 +151,10 @@ export const FAQPopup: React.FC<FAQPopupProps> = ({ isOpen, onClose }) => {
                     </div>
                 </div>
 
-                <div className="p-6 text-right bg-slate-900/50 border-t border-slate-800">
+                <div className="flex items-center justify-between gap-3 p-6 bg-slate-900/50 border-t border-slate-800">
+                    <span className="font-mono text-[10px] tracking-[.14em] text-slate-500">
+                        {loading ? '加载中…' : sourceLabel ? `来源：${sourceLabel}` : '来源：内置'}
+                    </span>
                     <button
                         onClick={onClose}
                         className="px-6 py-2 font-bold rounded-lg shadow-md transition-colors duration-200 bg-slate-600 hover:bg-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-slate-500"
