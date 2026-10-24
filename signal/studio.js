@@ -4,6 +4,7 @@ import {DEFAULT_DESIGN,DESIGN_GROUPS,DESIGN_FIELDS,validateDesign,outsideSliderR
 import {ASPECTS,moveOption,exportSettings,importSettings,previewIssue} from './editor-data.js';
 import {DESIGN_STORAGE_KEY} from './default-settings.js';
 import {exportFrameZip} from './frame-export.js';
+import {exportVideo,canEncodeAudio} from './video-export.js';
 const $=id=>document.getElementById(id),initial=resolveOptionSource(APP_CONFIG.optionSource),OPTION_STORAGE_KEY='signal-custom-options-v1',defaultCustomOptions=resolveOptionSource({mode:'custom'});
 function loadDesign(){try{return validateDesign(JSON.parse(localStorage.getItem(DESIGN_STORAGE_KEY)??'{}'));}catch{return {...DEFAULT_DESIGN};}}
 function loadCustomOptions(){try{const saved=localStorage.getItem(OPTION_STORAGE_KEY);return saved?validateOptions(JSON.parse(saved)):structuredClone(defaultCustomOptions);}catch{return structuredClone(defaultCustomOptions);}}
@@ -148,8 +149,31 @@ function downloadSettings(){
   announce('已导出选项顺序、数字、画面参数和预览设置。');
 }
 let frameExportRunning=false,frameExportCancelled=false;
-function openFrameExport(){
+/** 没有 AAC 编码器就没法写 MP4 音轨，提前禁用并说明，别让用户导出后才发现没声音 */
+let audioEncodable=null;
+async function refreshAudioOption(){
+  if(audioEncodable===null)audioEncodable=await canEncodeAudio();
+  const box=$('frame-audio');
+  box.disabled=!audioEncodable;
+  if(!audioEncodable)box.checked=false;
+  $('frame-audio-row').classList.toggle('is-disabled',!audioEncodable);
+  $('frame-audio-row').title=audioEncodable?'':'当前浏览器不支持 AAC 编码';
+}
+function syncFormatUi(){
+  const isMp4=$('frame-format').value==='mp4';
+  $('frame-audio-row').hidden=!isMp4;
+  $('frame-bitrate-label').hidden=!isMp4;
+  $('frame-export-start').textContent=isMp4?'生成 MP4':'生成 ZIP';
+  const note=audioEncodable===false
+    ? '（注意：当前浏览器不支持 AAC 音频编码，只能导出无声视频，声音请在剪辑软件里合成。）'
+    : '';
+  $('frame-format-hint').textContent=isMp4
+    ? `MP4 用浏览器内置编码器在本地合成，含 H.264 画面与 AAC 音轨${audioEncodable===false?'':'；不支持 WebCodecs 的浏览器请改用 PNG 帧序列'}。${note}`
+    : 'PNG 帧序列适合拿去剪辑软件里二次处理，压缩包内含 manifest.json。';
+}
+async function openFrameExport(){
   $('frame-start').value='0';$('frame-end').value=(Math.floor(APP_CONFIG.duration*10)/10).toFixed(1);$('frame-aspect').value=state.aspect;
+  await refreshAudioOption();syncFormatUi();
   $('frame-progress').hidden=true;$('frame-progress').value=0;$('frame-export-cancel').hidden=true;
   $('frame-export-start').disabled=false;$('frame-export-status').textContent='';
   $('frame-export-close').disabled=false;
@@ -161,16 +185,28 @@ async function runFrameExport(){
   const button=$('frame-export-start'),cancel=$('frame-export-cancel'),progress=$('frame-progress'),status=$('frame-export-status');
   button.disabled=true;cancel.hidden=false;$('frame-export-close').disabled=true;progress.hidden=false;progress.value=0;
   try{
-    const result=await exportFrameZip({
+    const isMp4=$('frame-format').value==='mp4';
+    const shared={
       options:structuredClone(state.options),design:structuredClone(state.design),view:state.view,selectedId:state.selectedId,
       aspect:$('frame-aspect').value,start:Number($('frame-start').value),end:Number($('frame-end').value),fps:Number($('frame-fps').value),
       isCancelled:()=>frameExportCancelled,
       onProgress:(complete,total,time)=>{progress.value=complete/total*100;status.textContent=`正在渲染 ${complete}/${total} 帧 · ${time.toFixed(2)} 秒`;}
-    });
+    };
+    const result=isMp4
+      ? await exportVideo({...shared,withAudio:$('frame-audio').checked,bitrateMbps:Number($('frame-bitrate').value)||8,
+          onStage:text=>{status.textContent=text;}})
+      : await exportFrameZip(shared);
     if(!result){status.textContent='导出已取消。';return;}
-    const url=URL.createObjectURL(result.blob),link=document.createElement('a');link.href=url;link.download=`signal-frames-${result.width}x${result.height}-${result.fps}fps.zip`;link.click();
-    setTimeout(()=>URL.revokeObjectURL(url),60000);
-    status.textContent=`已生成 ${result.frameCount} 帧（${result.width} × ${result.height}，${result.fps} FPS），ZIP 已开始下载。`;
+    const url=URL.createObjectURL(result.blob),link=document.createElement('a');link.href=url;
+    if(isMp4){
+      link.download=`signal-${result.width}x${result.height}-${result.fps}fps.mp4`;link.click();
+      setTimeout(()=>URL.revokeObjectURL(url),60000);
+      status.textContent=`已导出 ${result.frameCount} 帧 MP4（${result.width} × ${result.height}，${result.fps} FPS${result.hasAudio?' · 含音频':' · 无声'}）。`;
+    }else{
+      link.download=`signal-frames-${result.width}x${result.height}-${result.fps}fps.zip`;link.click();
+      setTimeout(()=>URL.revokeObjectURL(url),60000);
+      status.textContent=`已生成 ${result.frameCount} 帧（${result.width} × ${result.height}，${result.fps} FPS），ZIP 已开始下载。`;
+    }
   }catch(error){status.textContent=`导出失败：${error.message}`;}
   finally{frameExportRunning=false;button.disabled=false;$('frame-export-close').disabled=false;cancel.hidden=true;}
 }
@@ -200,7 +236,7 @@ function snapshot(){return structuredClone({options:state.options,optionSource:s
 $('view-grid').onclick=()=>setView('grid');$('view-single').onclick=()=>setView('single');$('selected-option').onchange=e=>setView('single',e.target.value);
 $('aspect-select').onchange=e=>setAspect(e.target.value);
 $('export-settings').onclick=downloadSettings;
-$('export-frames').onclick=openFrameExport;$('frame-export-start').onclick=()=>void runFrameExport();
+$('export-frames').onclick=openFrameExport;$('frame-format').onchange=()=>{syncFormatUi();};$('frame-export-start').onclick=()=>void runFrameExport();
 $('frame-export-cancel').onclick=()=>{$('frame-export-status').textContent='正在取消…';frameExportCancelled=true;};
 $('frame-export-dialog').addEventListener('cancel',event=>{if(frameExportRunning){event.preventDefault();frameExportCancelled=true;$('frame-export-status').textContent='正在取消…';}});
 $('import-settings').onclick=()=>{$('settings-file').value='';$('settings-file').click();};

@@ -26,3 +26,11 @@
 原生 HTML、CSS、JavaScript 和 Canvas；无需安装网页依赖。项目采用 MIT License，Saira 字体依 SIL Open Font License 随仓库提供。
 
 仓库代码由 GPT-6 Astra 完成。
+
+## PCD 二改：MP4 导出
+
+原项目导出 PNG 帧序列；PCD 额外支持直接导出 MP4（H.264 + AAC，本地编码）。
+在「导出视频」对话框里把格式选为 MP4 即可，可勾选是否包含音频、调整视频码率。
+
+若浏览器不支持 AAC 编码，「包含音频」会自动禁用并说明原因。
+详见 `ATTRIBUTION.md`。
