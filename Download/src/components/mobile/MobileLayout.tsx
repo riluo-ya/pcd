@@ -1,29 +1,23 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Song, SortConfig, FileInfo } from '../../types';
-import { ExportState } from '../SongWorkspace';
 import { MobileLibrary } from './MobileLibrary';
 import { MobileSongView } from './MobileSongView';
 import { BottomSheet } from './BottomSheet';
-import { useSongFilter } from '../../hooks/useSongFilter';
-import { useSettings } from '../../contexts/SettingsContext';
-import { PROXY_SOURCES } from '../../utils/resourceUrls';
-import { useFaq } from '../../utils/faq';
-import { AudioVisualizer } from '../AudioVisualizer';
-import { SongEffectRenderer } from '../SongEffectRenderer';
-import { SongEffectType } from '../../song-effects';
+import { SongFilterPanel } from '../SongFilterPanel';
+import { SongFilter } from '../../hooks/useSongFilter';
 
-const REPO_URL = 'https://github.com/swordalt/phigros-chart-downloader/';
-// Marks the history entry pushed when a song page opens, so the system back gesture returns to the list.
+// 推入歌曲页时打的 history 标记，让系统返回手势能回到列表
 const HISTORY_KEY = 'pcdSongView';
 
-type Sheet = 'menu' | 'range';
+type Sheet = 'menu' | 'filter';
 
 interface MobileLayoutProps {
     songs: Song[];
+    filter: SongFilter;
     isLoadingSongs: boolean;
     errorSongs: string | null;
     selectedSong: Song | null;
-    onSongSelect: (song: Song) => void;
+    onSongSelect: (song: Song | null) => void;
     sortConfig: SortConfig;
     onSortConfigChange: (config: SortConfig) => void;
 
@@ -43,26 +37,26 @@ interface MobileLayoutProps {
     isLoadingFiles: boolean;
     difficulties: string[];
     selectedDifficulty: string | null;
-    onSelectDifficulty: (difficulty: string) => void;
-    exportState: ExportState;
+    onSelectDifficulty: (difficulty: string | null) => void;
+    onFilesFound: (files: FileInfo[]) => void;
+    exportState: { type: 'phira' | 'chart' | null; progress: number };
     onExportChart: () => void;
     onExportAllAssets: () => void;
-    onExportAllDifficulties?: () => void;
-    onShareCardClick?: () => void;
-    onDownloaded: (fileName: string) => void;
+    onShareCard: () => void;
+    shareCardEnabled: boolean;
 
     bulkPanel: React.ReactNode | null;
-    toast: { id: number; text: string } | null;
-    /** 当前曲目命中的歌曲特效，null 表示不播放 */
-    effect?: SongEffectType | null;
-    songName?: string;
 }
 
 const eyebrow = 'font-mono text-[10px] font-medium tracking-[.16em] text-[#22d3ee]';
 
-/** Phone layout: the library gets the full height and a song opens as a pushed page. */
+/**
+ * 手机布局：曲库占满整屏，点一首歌把详情页从右侧推入。
+ * 与上游 MobileLayout 同构，菜单走底部抽屉；额外加了「返回导航」入口。
+ */
 export const MobileLayout: React.FC<MobileLayoutProps> = ({
     songs,
+    filter,
     isLoadingSongs,
     errorSongs,
     selectedSong,
@@ -79,16 +73,11 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
     onSourceClick,
     audio,
     bulkPanel,
-    toast,
-    effect,
-    songName,
     ...songViewProps
 }) => {
-    const { settings } = useSettings();
-    const filter = useSongFilter(songs);
     const [songOpen, setSongOpen] = useState(selectedSong !== null);
     const [sheet, setSheet] = useState<Sheet | null>(null);
-    // Keeps the closing sheet's content rendered while it slides out.
+    // 抽屉收起时保留上一份内容，否则滑出动画期间内容会先消失
     const [lastSheet, setLastSheet] = useState<Sheet>('menu');
 
     const openSheet = (s: Sheet) => {
@@ -97,12 +86,12 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
     };
     const closeSheet = useCallback(() => setSheet(null), []);
 
-    // A song selected from elsewhere (e.g. ?song= in the URL) opens its page.
+    // 从别处选中歌曲（比如 ?song= 分享链接）时也要推出详情页
     useEffect(() => {
         if (selectedSong) setSongOpen(true);
     }, [selectedSong]);
 
-    // The preview only plays on the song page; this also catches an audio element recreated while on the list.
+    // 音频只在歌曲页播放，回到列表就停
     useEffect(() => {
         if (!songOpen) audio?.pause();
     }, [audio, songOpen]);
@@ -118,10 +107,10 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
     const openSong = (song: Song) => {
         if (!songOpen) window.history.pushState({ [HISTORY_KEY]: true }, '');
         if (song.id === selectedSong?.id) {
-            // Same song again: its audio element is reused, so restart the preview by hand.
-            if (audio && settings.newUiAudioPreview) {
+            // 同一首歌再次打开：音频元素被复用，手动重新开始
+            if (audio) {
                 audio.currentTime = 0;
-                if (settings.newUiAutoplayAudio) audio.play().catch(err => console.warn('无法播放音频：', err));
+                audio.play().catch(() => {});
             }
         } else {
             onSongSelect(song);
@@ -140,20 +129,14 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
     };
 
     const dot = versionError ? '#f87171' : isLoadingVersion ? '#fbbf24' : '#4ade80';
-    const versionLabel = versionError ? '加载失败 · 重试' : isLoadingVersion ? '加载中…' : `Phigros ${version}`;
-    const proxyLabel = PROXY_SOURCES.find(p => p.id === settings.proxySource)?.label ?? '';
-    // 条目数跟着外部 faq.json 走，加载失败时用内置条数
-    const { faqs } = useFaq();
+    const versionLabel = versionError ? '失败 · 重试' : isLoadingVersion ? '加载中 …' : `Phigros v${version}`;
 
     const menuItems: { label: string; meta: string; onClick: () => void }[] = [
+        { label: '设置', meta: '', onClick: () => openDialog(onSettingsClick) },
+        { label: '加速源', meta: '', onClick: () => openDialog(onSourceClick) },
+        { label: '常见问题', meta: '', onClick: () => openDialog(onFaqClick) },
         { label: '关于', meta: '', onClick: () => openDialog(onAboutClick) },
-        { label: '常见问题', meta: String(faqs.length), onClick: () => openDialog(onFaqClick) },
-        { label: '设置', meta: proxyLabel, onClick: () => openDialog(onSettingsClick) },
-        { label: '加速源', meta: proxyLabel, onClick: () => openDialog(onSourceClick) },
     ];
-
-    const { minInput, setMinInput, maxInput, setMaxInput, difficultyBounds, displayedSongs } = filter;
-    const rangeInput = 'w-full h-12 rounded-[10px] bg-white/[.04] border border-white/[.08] text-center font-mono text-base font-medium text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-[rgba(34,211,238,.45)] disabled:opacity-50';
 
     const renderMenu = () => (
         <div className="flex flex-col gap-3.5">
@@ -163,10 +146,13 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
                     type="button"
                     onClick={versionError ? onRetryVersion : undefined}
                     disabled={!versionError}
-                    title={versionError ?? '游戏版本资源解包自'}
+                    title={versionError ?? '资源解包自该游戏版本'}
                     className="flex items-center gap-2 px-3 py-[5px] rounded-full border border-white/[.08] font-mono text-[11px] font-medium text-slate-400 whitespace-nowrap"
                 >
-                    <span className={`w-1.5 h-1.5 rounded-full ${isLoadingVersion ? 'animate-pulse' : ''}`} style={{ background: dot, boxShadow: `0 0 8px ${dot}` }} />
+                    <span
+                        className={`w-1.5 h-1.5 rounded-full ${isLoadingVersion ? 'animate-pulse' : ''}`}
+                        style={{ background: dot, boxShadow: `0 0 8px ${dot}` }}
+                    />
                     {versionLabel}
                 </button>
             </div>
@@ -180,63 +166,48 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
                     >
                         <span className="flex-1">{item.label}</span>
                         <span className="font-mono text-[11px] font-medium text-slate-500">{item.meta}</span>
-                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="#475569"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
+                        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="#475569">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                        </svg>
                     </button>
                 ))}
             </div>
+            {/* 返回导航中心：手机端没有顶栏导航，这是唯一的出口 */}
+            <a
+                href="./home.html"
+                className="h-12 rounded-[10px] border border-white/[.12] flex items-center justify-center gap-2 text-sm font-semibold text-slate-300 active:bg-white/[.05]"
+            >
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                </svg>
+                返回导航中心
+            </a>
             <p className="text-xs leading-[1.5] text-slate-500 text-center">
-                本站基于 <a href={REPO_URL} target="_blank" rel="noreferrer" className="text-[#22d3ee] hover:text-[#67e8f9]">Phigros Chart Downloader</a> 二次开发，非 Phigros 官方项目。全部素材版权归各自权利人所有。
+                本工具非官方项目，所有素材归各自版权方所有。
             </p>
         </div>
     );
 
-    const renderRange = () => (
-        <div className="flex flex-col gap-4">
+    const renderFilter = () => (
+        <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-0.5">
-                <span className={eyebrow}>难度范围</span>
-                <span id="mobile-sheet-title" className="text-[21px] font-semibold text-slate-100">按定数筛选</span>
+                <span className={eyebrow}>筛选</span>
+                <span id="mobile-sheet-title" className="text-[21px] font-semibold text-slate-100">
+                    按难度 / 定数 / 谱师 / 曲师
+                </span>
             </div>
-            <div className="flex items-center gap-2.5">
-                {[
-                    { label: 'MIN', value: minInput, set: setMinInput, placeholder: difficultyBounds?.min },
-                    { label: 'MAX', value: maxInput, set: setMaxInput, placeholder: difficultyBounds?.max },
-                ].map((field, i) => (
-                    <React.Fragment key={field.label}>
-                        {i === 1 && <span className="pt-5 text-slate-600">–</span>}
-                        <label className="flex-1 flex flex-col gap-1.5">
-                            <span className="font-mono text-[10px] font-medium tracking-[.14em] text-slate-500">{field.label === 'MIN' ? '最低' : '最高'}</span>
-                            <input
-                                type="number"
-                                inputMode="decimal"
-                                step={0.1}
-                                min={difficultyBounds?.min}
-                                max={difficultyBounds?.max}
-                                value={field.value}
-                                onChange={e => field.set(e.target.value)}
-                                placeholder={field.placeholder !== undefined ? String(field.placeholder) : ''}
-                                disabled={!difficultyBounds}
-                                className={rangeInput}
-                            />
-                        </label>
-                    </React.Fragment>
-                ))}
-            </div>
-            <div className="flex gap-2.5">
-                <button
-                    type="button"
-                    onClick={() => { setMinInput(''); setMaxInput(''); }}
-                    className="h-12 px-[18px] rounded-[10px] border border-white/[.12] text-sm font-semibold text-slate-200"
-                >
-                    重置
-                </button>
-                <button
-                    type="button"
-                    onClick={closeSheet}
-                    className="flex-1 h-12 rounded-[10px] bg-[#22d3ee] text-[#06141a] text-sm font-bold"
-                >
-                    显示 {displayedSongs.length} 首
-                </button>
-            </div>
+            <SongFilterPanel
+                filter={filter}
+                songs={songs}
+                filteredCount={filter.displayedSongs.length}
+            />
+            <button
+                type="button"
+                onClick={closeSheet}
+                className="h-12 rounded-[10px] bg-[#22d3ee] text-[#06141a] text-sm font-bold"
+            >
+                查看 {filter.displayedSongs.length} 首
+            </button>
         </div>
     );
 
@@ -244,20 +215,6 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
 
     return (
         <div className="relative flex-1 min-h-0 overflow-hidden">
-            {settings.newUiShowVisualizer && audio && !settings.bulkDownloadMode && songOpen && (
-                <div className="absolute inset-0 z-0 pointer-events-none">
-                    <AudioVisualizer
-                        audio={audio}
-                        color={settings.newUiVisualizerColor}
-                        height={settings.newUiVisualizerHeight}
-                        opacity={settings.newUiVisualizerOpacity}
-                    />
-                </div>
-            )}
-            {effect && !settings.bulkDownloadMode && songOpen && (
-                <SongEffectRenderer effect={effect} audio={audio} songName={songName} />
-            )}
-
             <MobileLibrary
                 filter={filter}
                 isLoading={isLoadingSongs}
@@ -267,7 +224,7 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
                 sortConfig={sortConfig}
                 onSortConfigChange={onSortConfigChange}
                 onOpenMenu={() => openSheet('menu')}
-                onOpenRange={() => openSheet('range')}
+                onOpenFilter={() => openSheet('filter')}
                 bulkPanel={bulkPanel}
             />
 
@@ -276,26 +233,12 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
                     open={songOpen && selectedSong !== null}
                     onBack={goBack}
                     song={selectedSong}
-                    audio={audio}
                     {...songViewProps}
                 />
             )}
 
-            {toast && (
-                <div
-                    key={toast.id}
-                    role="status"
-                    className="motion-toast-mobile fixed left-4 right-4 bottom-[calc(104px+env(safe-area-inset-bottom))] z-30 flex items-center gap-2.5 pl-3 pr-3.5 py-[11px] rounded-xl bg-[rgba(12,15,22,.96)] border border-[rgba(34,211,238,.3)] shadow-[0_20px_50px_rgba(0,0,0,.5)] text-[13px] text-slate-200"
-                >
-                    <span className="w-5 h-5 flex-none rounded-full bg-[#22d3ee] flex items-center justify-center">
-                        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="#06141a"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
-                    </span>
-                    <span className="min-w-0 truncate">{toast.text}</span>
-                </div>
-            )}
-
             <BottomSheet open={sheet !== null} onClose={closeSheet} labelledBy="mobile-sheet-title">
-                {sheetContent === 'menu' ? renderMenu() : renderRange()}
+                {sheetContent === 'menu' ? renderMenu() : renderFilter()}
             </BottomSheet>
         </div>
     );

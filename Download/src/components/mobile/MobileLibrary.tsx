@@ -1,12 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Spinner } from '../Spinner';
-import { ErrorIcon, MagnifyingGlassIcon, ChevronDownIcon } from '../Icons';
-import { useSettings } from '../../contexts/SettingsContext';
+import { ErrorIcon, MagnifyingGlassIcon, ChevronDownIcon, FunnelIcon, ArrowsUpDownIcon } from '../Icons';
 import { Song, SortConfig } from '../../types';
-import { HOME_URL } from '../../utils/navLinks';
-import { getBlurIllustrationUrl } from '../../utils/resourceUrls';
-import { SongFilter, SORT_CYCLE, getSortIndex } from '../../hooks/useSongFilter';
+import { SongFilter } from '../../hooks/useSongFilter';
+import { ghRaw } from '../../utils/sources';
 
 interface MobileLibraryProps {
     filter: SongFilter;
@@ -17,16 +15,17 @@ interface MobileLibraryProps {
     sortConfig: SortConfig;
     onSortConfigChange: (config: SortConfig) => void;
     onOpenMenu: () => void;
-    onOpenRange: () => void;
-    /** Replaces the list, filters and search while bulk download mode is on. */
+    onOpenFilter: () => void;
+    /** 批量下载模式：替换掉列表、筛选和搜索框 */
     bulkPanel?: React.ReactNode;
 }
 
 const ROW_HEIGHT = 60;
 
+/** 列表里的曲绘缩略图，加载失败时留一个斜纹占位，不出现破图 */
 const SongThumbnail: React.FC<{ src: string }> = ({ src }) => {
-    const [loaded, setLoaded] = useState(false);
-    const [failed, setFailed] = useState(false);
+    const [loaded, setLoaded] = React.useState(false);
+    const [failed, setFailed] = React.useState(false);
     return (
         <span className="relative w-16 h-9 flex-none rounded-md overflow-hidden bg-[repeating-linear-gradient(135deg,#1e293b_0_4px,#172033_4px_8px)]">
             {!failed && (
@@ -47,6 +46,10 @@ const SongThumbnail: React.FC<{ src: string }> = ({ src }) => {
 
 const chip = 'flex-none h-[34px] rounded-[17px] border flex items-center transition-colors';
 
+/**
+ * 手机端的曲库列表：整屏高度，顶部标题栏 + 筛选 chips，中间虚拟列表，底部常驻搜索框。
+ * 与上游 MobileLibrary 同构，但筛选沿用本站的完整条件（难度 / 定数 / 谱师 / 曲师）。
+ */
 export const MobileLibrary: React.FC<MobileLibraryProps> = ({
     filter,
     isLoading,
@@ -56,11 +59,10 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
     sortConfig,
     onSortConfigChange,
     onOpenMenu,
-    onOpenRange,
+    onOpenFilter,
     bulkPanel,
 }) => {
-    const { settings } = useSettings();
-    const { searchTerm, setSearchTerm, onlyHasAt, setOnlyHasAt, isRangeActive, rangeLabel, displayedSongs, isSuggestion } = filter;
+    const { searchTerm, setSearchTerm, displayedSongs, isSuggestion, activeFilterCount } = filter;
     const parentRef = useRef<HTMLDivElement>(null);
 
     const rowVirtualizer = useVirtualizer({
@@ -70,28 +72,31 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
         overscan: 6,
     });
 
-    const sortIndex = getSortIndex(sortConfig);
-    const cycleSort = () => onSortConfigChange(SORT_CYCLE[(sortIndex + 1) % SORT_CYCLE.length].config);
+    const cycleSort = () =>
+        onSortConfigChange({ type: sortConfig.type, direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' });
 
     const renderList = () => {
         if (isLoading) {
             return (
                 <div className="flex items-center justify-center gap-3 py-12 text-sm text-slate-400">
                     <Spinner />
-                    <span>正在加载曲库…</span>
+                    <span>正在载入曲库…</span>
                 </div>
             );
         }
         if (error) {
             return (
                 <div className="flex flex-col items-center gap-2 text-center px-6 py-12">
-                    <span className="flex items-center gap-2 text-[#f87171] text-sm font-semibold"><ErrorIcon className="w-5 h-5" />曲库加载失败</span>
+                    <span className="flex items-center gap-2 text-[#f87171] text-sm font-semibold">
+                        <ErrorIcon className="w-5 h-5" />
+                        曲库加载失败
+                    </span>
                     <p className="font-mono text-[11px] text-slate-500 break-all">{error}</p>
                 </div>
             );
         }
         if (displayedSongs.length === 0) {
-            return <p className="px-4 py-12 text-center text-sm text-slate-500">没有找到匹配的曲目。</p>;
+            return <p className="px-4 py-12 text-center text-sm text-slate-500">没有匹配的曲目。</p>;
         }
         return (
             <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
@@ -108,9 +113,11 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
                             className={`absolute left-0 top-0 w-full h-[60px] flex items-center gap-3 px-2.5 rounded-[10px] text-left ${selected ? 'bg-[rgba(34,211,238,0.10)]' : 'active:bg-white/[.04]'}`}
                             style={{ transform: `translateY(${virtualItem.start}px)` }}
                         >
-                            <SongThumbnail src={getBlurIllustrationUrl(settings.proxySource, song.id)} />
+                            <SongThumbnail src={ghRaw(`7aGiven/Phigros_Resource/refs/heads/illustration/${song.id}.png`)} />
                             <span className="flex-1 min-w-0 flex flex-col gap-px">
-                                <span className={`text-[15px] leading-[1.25] truncate ${selected ? 'text-white' : 'text-slate-300'}`}>{song.name}</span>
+                                <span className={`text-[15px] leading-[1.25] truncate ${selected ? 'text-white' : 'text-slate-300'}`}>
+                                    {song.name}
+                                </span>
                                 <span className="text-xs leading-[1.3] text-slate-500 truncate">{song.composer}</span>
                             </span>
                         </button>
@@ -123,18 +130,23 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
     return (
         <div className="absolute inset-0 flex flex-col bg-[#0d1118]">
             <div className="flex-none bg-[#090c11] border-b border-white/[.1]">
-                <header className="h-[52px] flex items-center justify-between gap-3 pl-2 pr-2">
-                    <a
-                        href={HOME_URL}
-                        aria-label="返回导航中心"
-                        title="返回导航中心"
-                        className="w-10 h-10 flex-none flex items-center justify-center rounded-xl text-slate-300 active:bg-white/[.05]"
-                    >
-                        <svg width="21" height="21" fill="none" viewBox="0 0 24 24" strokeWidth={1.7} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
-                    </a>
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <header className="h-[52px] flex items-center justify-between gap-3 pl-[18px] pr-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        {/* 返回导航中心：手机端没有顶栏导航，这里给一个常驻出口 */}
+                        <a
+                            href="./home.html"
+                            aria-label="返回导航中心"
+                            title="返回导航中心"
+                            className="w-9 h-9 -ml-1.5 flex-none flex items-center justify-center rounded-lg text-slate-400 active:bg-white/[.06]"
+                        >
+                            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                            </svg>
+                        </a>
                         <span className="w-4 h-4 flex-none bg-[#22d3ee] -skew-x-[14deg]" aria-hidden="true" />
-                        <h1 className="font-semibold text-[13px] tracking-[.16em] text-slate-100 truncate">PHIGROS 谱面下载器</h1>
+                        <h1 className="font-semibold text-[13px] tracking-[.16em] text-slate-100 truncate">
+                            PHIGROS 谱面下载器
+                        </h1>
                     </div>
                     <button
                         type="button"
@@ -142,7 +154,9 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
                         aria-label="菜单"
                         className="w-11 h-11 flex-none flex items-center justify-center rounded-xl text-slate-300 active:bg-white/[.05]"
                     >
-                        <svg width="22" height="22" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+                        <svg width="22" height="22" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                        </svg>
                     </button>
                 </header>
 
@@ -150,33 +164,25 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
                     <div className="flex items-center gap-2 px-4 pb-3 overflow-x-auto">
                         <button
                             type="button"
-                            aria-pressed={onlyHasAt}
-                            onClick={() => setOnlyHasAt(v => !v)}
-                            className={`${chip} gap-1.5 px-3 font-mono text-xs font-semibold ${onlyHasAt ? 'border-[rgba(74,222,128,.35)] bg-[rgba(74,222,128,.12)] text-[#4ade80]' : 'border-white/[.08] text-slate-200'}`}
+                            onClick={onOpenFilter}
+                            aria-label="筛选"
+                            className={`${chip} gap-1.5 pl-3 pr-2.5 font-mono text-xs font-medium ${activeFilterCount > 0 ? 'border-[rgba(34,211,238,.4)] bg-[rgba(34,211,238,.1)] text-[#22d3ee]' : 'border-white/[.08] text-slate-400'}`}
                         >
-                            含 AT
-                        </button>
-                        <button
-                            type="button"
-                            onClick={onOpenRange}
-                            aria-label={`难度范围 ${rangeLabel}`}
-                            className={`${chip} gap-1 pl-3 pr-2.5 font-mono text-xs font-medium ${isRangeActive ? 'border-[rgba(34,211,238,.4)] bg-[rgba(34,211,238,.1)] text-[#22d3ee]' : 'border-white/[.08] text-slate-400'}`}
-                        >
-                            Lv {rangeLabel}
-                            <ChevronDownIcon className="w-3 h-3 [stroke-width:2]" />
+                            <FunnelIcon className="w-3.5 h-3.5" />
+                            筛选{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}
                         </button>
                         <button
                             type="button"
                             onClick={cycleSort}
-                            aria-label={`排序方式：${SORT_CYCLE[sortIndex].label}`}
+                            aria-label="切换排序"
                             className={`${chip} gap-[5px] px-3 border-white/[.08] text-xs font-medium text-slate-400`}
                         >
-                            {SORT_CYCLE[sortIndex].label}
-                            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5L7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5" /></svg>
+                            {sortConfig.direction === 'asc' ? '升序' : '降序'}
+                            <ArrowsUpDownIcon className="w-3 h-3" />
                         </button>
                         <span className="flex-1" />
                         <span className="flex-none font-mono text-[10px] font-medium tracking-[.12em] text-slate-600 whitespace-nowrap">
-                            {isSuggestion && <span className="text-[#22d3ee]">你是不是要找 · </span>}
+                            {isSuggestion && <span className="text-[#22d3ee]">别名 · </span>}
                             {isLoading ? '—' : `${displayedSongs.length} 首`}
                         </span>
                     </div>
@@ -184,10 +190,15 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
             </div>
 
             {bulkPanel ? (
-                <div className="flex-1 min-h-0 overflow-y-auto thin-scroll">{bulkPanel}</div>
+                <div className="flex-1 min-h-0">{bulkPanel}</div>
             ) : (
                 <>
-                    <div ref={parentRef} role="listbox" aria-label="曲目列表" className="flex-1 min-h-0 overflow-y-auto px-2 pt-1.5 pb-6">
+                    <div
+                        ref={parentRef}
+                        role="listbox"
+                        aria-label="歌曲列表"
+                        className="flex-1 min-h-0 overflow-y-auto thin-scroll px-2 pt-1.5 pb-6"
+                    >
                         {renderList()}
                     </div>
 
@@ -205,7 +216,7 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
                                         if (displayedSongs.length > 0) onOpenSong(displayedSongs[0]);
                                     }
                                 }}
-                                placeholder="搜索曲名 / 曲师 / 别名"
+                                placeholder="搜索曲名或曲师"
                                 aria-label="搜索曲名、曲师或别名"
                                 className="flex-1 min-w-0 bg-transparent text-base text-slate-200 placeholder:text-slate-500 focus:outline-none"
                             />
@@ -213,10 +224,12 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => setSearchTerm('')}
-                                    aria-label="清空搜索"
+                                    aria-label="清除搜索"
                                     className="w-8 h-8 -mr-1.5 flex-none flex items-center justify-center text-slate-500"
                                 >
-                                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
                                 </button>
                             )}
                         </label>

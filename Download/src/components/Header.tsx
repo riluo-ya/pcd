@@ -73,7 +73,7 @@ export const Header: React.FC<HeaderProps> = memo(
                         <AssetsPill {...versionProps} />
                     </span>
                     <span className="hidden md:block w-px h-5 bg-white/[.08] mx-2.5" aria-hidden="true" />
-                    <a href="./home.html" className={`${navButton} hidden sm:block`}>
+                    <a href="./home.html" className={navButton}>
                         返回导航
                     </a>
                     <button type="button" onClick={onAboutClick} className={navButton}>

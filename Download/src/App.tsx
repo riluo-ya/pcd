@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { NoticeDialog, Button, ErrorBody } from './components/ui/Dialog';
 import { Header } from './components/Header';
+import { useIsMobile } from './hooks/useIsMobile';
+import { useSongFilter } from './hooks/useSongFilter';
+import { MobileLayout } from './components/mobile/MobileLayout';
 import { SongSelector } from './components/SongSelector';
 import { FileTable } from './components/FileTable';
 import { DifficultySelector } from './components/DifficultySelector';
@@ -45,8 +48,8 @@ const App: React.FC = () => {
     const [isAboutOpen, setIsAboutOpen] = useState(false);
     const [isSourceOpen, setIsSourceOpen] = useState(false);
     const [isShareCardOpen, setIsShareCardOpen] = useState(false);
-    // 窄屏下一次只显示一栏：'list' 选歌 / 'detail' 详情。宽屏（md+）左右分栏，忽略此状态。
-    const [mobileView, setMobileView] = useState<'list' | 'detail'>('list');
+    // 手机走另一套组件树（推入式页面 + 底部抽屉），与上游一致；桌面仍是左右分栏。
+    const isMobile = useIsMobile();
     
 
     // Background and Audio management
@@ -76,6 +79,9 @@ const App: React.FC = () => {
         
         return result;
     }, [songs, sortConfig]);
+
+    // 手机端曲库的筛选与搜索状态（必须在 sortedSongs 之后声明）
+    const mobileFilter = useSongFilter(sortedSongs);
 
     /**
      * 拉取资源版本。
@@ -122,7 +128,6 @@ const App: React.FC = () => {
         setSelectedDifficulty(null);
         setAvailableDifficulties([]);
         setFiles([]);
-        if (song) setMobileView('detail');
     }, []);
     
     useEffect(() => {
@@ -139,11 +144,6 @@ const App: React.FC = () => {
             }
         }
     }, [songs, handleSongSelect]);
-
-    // 窄屏：打开批量下载时把视图切到详情区，否则面板被列表挡着看不见
-    useEffect(() => {
-        if (settings.bulkDownloadMode) setMobileView('detail');
-    }, [settings.bulkDownloadMode]);
 
     // Enhanced New UI with preloading and audio state
     useEffect(() => {
@@ -332,7 +332,7 @@ const App: React.FC = () => {
     const isExporting = exportState.type !== null;
 
     return (
-        <div className="relative min-h-dvh md:h-dvh flex flex-col antialiased font-saira md:overflow-hidden text-slate-200 bg-[#090b10]">
+        <div className="relative h-dvh flex flex-col antialiased font-saira text-slate-200 bg-[#090b10] overflow-hidden">
             {/* New UI Background Layer - Fixed Z-0 */}
             <div 
                 className="fixed top-0 left-0 w-full h-[100lvh] z-0 pointer-events-none"
@@ -394,208 +394,233 @@ const App: React.FC = () => {
             )}
             
             {/* Content Layer - Relative Z-10 */}
-            <div className={`relative z-10 flex-1 md:min-h-0 flex flex-col ${activeEffect === 'glitch' ? 'effect-glitch-active' : ''} ${activeEffect === 'cracking' ? 'effect-cracking-active' : ''}`}>
-                 {/* Standard background decorative shape, only visible if New UI bg isn't loaded */}
-                 <div 
-                     className={`absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80 transition-opacity duration-500 ${!isBgLoaded ? 'opacity-100' : 'opacity-0'}`} 
-                     aria-hidden="true"
-                 >
-                     <div 
-                         className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-[#80ff89] to-[#22d3ee] opacity-20 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]" 
-                         style={{
-                             clipPath: 'polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)'
-                         }}
-                     ></div>
-                 </div>
-
-                <Header
+            {/* 手机端：另一套组件树（推入式歌曲页 + 底部抽屉菜单），与上游布局一致 */}
+            {isMobile ? (
+                <MobileLayout
+                    songs={sortedSongs}
+                    filter={mobileFilter}
+                    isLoadingSongs={isLoadingSongs}
+                    errorSongs={errorSongs}
+                    selectedSong={selectedSong}
+                    onSongSelect={handleSongSelect}
+                    sortConfig={sortConfig}
+                    onSortConfigChange={setSortConfig}
                     version={version}
                     isLoadingVersion={isLoadingVersion}
                     versionError={errorVersion}
                     onRetryVersion={loadVersion}
-                    onSettingsClick={() => setIsSettingsOpen(true)}
-                    onFaqClick={() => setIsFaqOpen(true)}
                     onAboutClick={() => setIsAboutOpen(true)}
+                    onFaqClick={() => setIsFaqOpen(true)}
+                    onSettingsClick={() => setIsSettingsOpen(true)}
                     onSourceClick={() => setIsSourceOpen(true)}
+                    bgImage={bgImage}
+                    isBgLoaded={isBgLoaded}
+                    audio={activeAudio}
+                    files={files}
+                    isLoadingFiles={!!selectedSong && availableDifficulties.length === 0}
+                    difficulties={availableDifficulties}
+                    selectedDifficulty={selectedDifficulty}
+                    onSelectDifficulty={setSelectedDifficulty}
+                    onFilesFound={handleFilesFound}
+                    exportState={exportState}
+                    onExportChart={handleExportChart}
+                    onExportAllAssets={handleExportAllAssets}
+                    onShareCard={() => setIsShareCardOpen(true)}
+                    shareCardEnabled={settings.shareCardEnabled}
+                    bulkPanel={settings.bulkDownloadMode ? <BulkDownloadPanel songs={sortedSongs} isLoading={isLoadingSongs} error={errorSongs} onExit={() => setSettings(prev => ({ ...prev, bulkDownloadMode: false }))} /> : null}
                 />
+            ) : (
 
-                <main className="flex-1 md:min-h-0 flex flex-col md:grid md:grid-cols-[340px_minmax(0,1fr)]">
-                    {/* 窄屏：列表与详情二选一，各占满一屏；宽屏（md+）始终并排显示 */}
-                    <aside className={`md:min-h-0 md:border-r border-white/[.06] ${mobileView === 'detail' ? 'hidden md:block' : 'block'}`}>
-                        <SongSelector 
-                                isLoading={isLoadingSongs}
-                                error={errorSongs}
-                                songs={sortedSongs}
-                                selectedSong={selectedSong}
-                                onSongSelect={handleSongSelect}
-                                sortConfig={sortConfig}
-                                onSortConfigChange={setSortConfig}
-                            />
-                    </aside>
+                <div className={`relative z-10 flex-1 min-h-0 flex flex-col ${activeEffect === 'glitch' ? 'effect-glitch-active' : ''} ${activeEffect === 'cracking' ? 'effect-cracking-active' : ''}`}>
+                     {/* Standard background decorative shape, only visible if New UI bg isn't loaded */}
+                     <div 
+                         className={`absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80 transition-opacity duration-500 ${!isBgLoaded ? 'opacity-100' : 'opacity-0'}`} 
+                         aria-hidden="true"
+                     >
+                         <div 
+                             className="relative left-[calc(50%-11rem)] aspect-[1155/678] w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-gradient-to-tr from-[#80ff89] to-[#22d3ee] opacity-20 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem]" 
+                             style={{
+                                 clipPath: 'polygon(74.1% 44.1%, 100% 61.6%, 97.5% 26.9%, 85.5% 0.1%, 80.7% 2%, 72.5% 32.5%, 60.2% 62.4%, 52.4% 68.1%, 47.5% 58.3%, 45.2% 34.5%, 27.5% 76.7%, 0.1% 64.9%, 17.9% 100%, 27.6% 76.8%, 76.1% 97.7%, 74.1% 44.1%)'
+                             }}
+                         ></div>
+                     </div>
 
-                    <section className={`relative md:min-h-0 md:h-full md:overflow-y-auto thin-scroll ${mobileView === 'list' ? 'hidden md:block' : 'block'}`}>
-                        {/* 窄屏返回列表：宽屏两侧并排，不需要这个按钮 */}
-                        <button
-                            type="button"
-                            onClick={() => setMobileView('list')}
-                            className="md:hidden sticky top-0 z-30 w-full flex items-center gap-1.5 px-4 py-2.5 bg-[#0d1118]/95 backdrop-blur-sm border-b border-white/[.06] text-sm text-slate-300 active:bg-white/[.06]"
-                        >
-                            <span aria-hidden="true">←</span>
-                            <span>返回歌曲列表</span>
-                        </button>
+                    <Header
+                        version={version}
+                        isLoadingVersion={isLoadingVersion}
+                        versionError={errorVersion}
+                        onRetryVersion={loadVersion}
+                        onSettingsClick={() => setIsSettingsOpen(true)}
+                        onFaqClick={() => setIsFaqOpen(true)}
+                        onAboutClick={() => setIsAboutOpen(true)}
+                        onSourceClick={() => setIsSourceOpen(true)}
+                    />
 
-                        {/* 批量下载模式：把面板铺满右侧工作区 */}
-                        {settings.bulkDownloadMode ? (
-                            <BulkDownloadPanel
-                                songs={sortedSongs}
-                                isLoading={isLoadingSongs}
-                                error={errorSongs}
-                                onExit={() => {
-                                setSettings(prev => ({ ...prev, bulkDownloadMode: false }));
-                                setMobileView('list');
-                            }}
-                            />
-                        ) : (
-                            <div className="min-h-full flex flex-col gap-6 px-5 sm:px-8 py-6">
-                            {/* 曲目标题区：对齐上游的大字号排版 */}
-                            <div className="flex flex-col gap-1">
-                                {selectedSong ? (
-                                    <>
-                                        <span className="font-mono text-[11px] font-medium tracking-[.12em] text-[#22d3ee] break-all select-all" title="歌曲 ID">
-                                            {selectedSong.id}
-                                        </span>
-                                        <h2 className="text-[32px] sm:text-[44px] font-bold leading-[1.15] tracking-[-0.01em] text-white break-words">
-                                            {selectedSong.name}
-                                        </h2>
-                                        <span className="text-base text-slate-400">{selectedSong.composer}</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <span className="font-mono text-[11px] font-medium tracking-[.12em] text-[#22d3ee]">
-                                            未选择歌曲
-                                        </span>
-                                        <h2 className="text-[32px] sm:text-[44px] font-bold leading-[1.15] tracking-[-0.01em] text-white">
-                                            选一首歌
-                                        </h2>
-                                        <span className="text-base text-slate-400">
-                                            从左侧列表挑一首，查看它的谱面与文件。
-                                        </span>
-                                    </>
-                                )}
-                            </div>
+                    <main className="flex-1 min-h-0 grid grid-rows-[minmax(0,40%)_minmax(0,1fr)] md:grid-rows-1 md:grid-cols-[340px_minmax(0,1fr)]">
+                        {/* 窄屏：列表与详情二选一，各占满一屏；宽屏（md+）始终并排显示 */}
+                        <aside className="min-h-0 border-b md:border-b-0 md:border-r border-white/[.06]">
+                            <SongSelector 
+                                    isLoading={isLoadingSongs}
+                                    error={errorSongs}
+                                    songs={sortedSongs}
+                                    selectedSong={selectedSong}
+                                    onSongSelect={handleSongSelect}
+                                    sortConfig={sortConfig}
+                                    onSortConfigChange={setSortConfig}
+                                />
+                        </aside>
 
-                            {/* Audio Player - 位于工作区顶部 */}
-                            {settings.useNewUi && settings.newUiAudioPreview && (
-                                <div className="flex flex-col items-center justify-center z-20 w-full max-w-lg">
-                                    {activeAudio ? (
-                                        <AudioPlayerControl 
-                                            audio={activeAudio} 
-                                            songName={selectedSong?.name}
-                                            artist={selectedSong?.composer}
-                                        />
+                        <section className="relative min-h-0">
+                            {/* 批量下载模式：把面板铺满右侧工作区 */}
+                            {settings.bulkDownloadMode ? (
+                                <BulkDownloadPanel
+                                    songs={sortedSongs}
+                                    isLoading={isLoadingSongs}
+                                    error={errorSongs}
+                                    onExit={() => setSettings(prev => ({ ...prev, bulkDownloadMode: false }))}
+                                />
+                            ) : (
+                                <div className="min-h-full flex flex-col gap-6 px-5 sm:px-8 py-6">
+                                {/* 曲目标题区：对齐上游的大字号排版 */}
+                                <div className="flex flex-col gap-1">
+                                    {selectedSong ? (
+                                        <>
+                                            <span className="font-mono text-[11px] font-medium tracking-[.12em] text-[#22d3ee] break-all select-all" title="歌曲 ID">
+                                                {selectedSong.id}
+                                            </span>
+                                            <h2 className="text-[32px] sm:text-[44px] font-bold leading-[1.15] tracking-[-0.01em] text-white break-words">
+                                                {selectedSong.name}
+                                            </h2>
+                                            <span className="text-base text-slate-400">{selectedSong.composer}</span>
+                                        </>
                                     ) : (
-                                        <div className="px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-slate-500 text-sm italic backdrop-blur-sm">
-                                            选择歌曲以播放其音频。
-                                        </div>
+                                        <>
+                                            <span className="font-mono text-[11px] font-medium tracking-[.12em] text-[#22d3ee]">
+                                                未选择歌曲
+                                            </span>
+                                            <h2 className="text-[32px] sm:text-[44px] font-bold leading-[1.15] tracking-[-0.01em] text-white">
+                                                选一首歌
+                                            </h2>
+                                            <span className="text-base text-slate-400">
+                                                从左侧列表挑一首，查看它的谱面与文件。
+                                            </span>
+                                        </>
                                     )}
                                 </div>
-                            )}
 
-                                <div className="relative z-30 w-full max-w-4xl mx-auto">
-                                <FileTable selectedSong={selectedSong} onFilesFound={handleFilesFound} />
-                                {selectedSong && availableDifficulties.length > 0 && (
-                                    <div className="relative mt-6 flex flex-col gap-4">
-                                            <DifficultySelector
-                                                difficulties={availableDifficulties}
-                                                selectedDifficulty={selectedDifficulty}
-                                                onSelectDifficulty={setSelectedDifficulty}
-                                                selectedSong={selectedSong}
-                                                highlight={false}
+                                {/* Audio Player - 位于工作区顶部 */}
+                                {settings.useNewUi && settings.newUiAudioPreview && (
+                                    <div className="flex flex-col items-center justify-center z-20 w-full max-w-lg">
+                                        {activeAudio ? (
+                                            <AudioPlayerControl 
+                                                audio={activeAudio} 
+                                                songName={selectedSong?.name}
+                                                artist={selectedSong?.composer}
                                             />
-                                        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2.5">
+                                        ) : (
+                                            <div className="px-4 py-2 rounded-lg bg-slate-800/50 border border-slate-700/50 text-slate-500 text-sm italic backdrop-blur-sm">
+                                                选择歌曲以播放其音频。
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                    <div className="relative z-30 w-full max-w-4xl mx-auto">
+                                    <FileTable selectedSong={selectedSong} onFilesFound={handleFilesFound} />
+                                    {selectedSong && availableDifficulties.length > 0 && (
+                                        <div className="relative mt-6 flex flex-col gap-4">
+                                                <DifficultySelector
+                                                    difficulties={availableDifficulties}
+                                                    selectedDifficulty={selectedDifficulty}
+                                                    onSelectDifficulty={setSelectedDifficulty}
+                                                    selectedSong={selectedSong}
+                                                    highlight={false}
+                                                />
+                                            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleExportChart}
+                                                    disabled={isExporting}
+                                                    aria-live="polite"
+                                                    className={`export-glow relative overflow-hidden w-full sm:w-auto sm:min-w-[220px] h-[52px] rounded-[10px] bg-[#22d3ee] hover:bg-[#67e8f9] text-[#06141a] flex items-center justify-center gap-2.5 font-bold text-[15px] tracking-[.04em] transition-colors disabled:cursor-not-allowed disabled:bg-[#22d3ee]/40`}
+                                                >
+                                                    {exportState.type === 'chart' ? (
+                                                        <>
+                                                            <Spinner />
+                                                            <span>导出中...</span>
+                                                        </>
+                                                    ) : selectedDifficulty ? (
+                                                        `导出为谱面（${selectedDifficulty}）`
+                                                    ) : (
+                                                        '导出全部难度'
+                                                    )}
+                                                    {exportState.type === 'chart' && (
+                                                        <div
+                                                            className="absolute bottom-0 left-0 h-[3px] bg-[#06141a]/40 transition-[width] duration-150"
+                                                            style={{ width: `${exportState.progress.toFixed(0)}%` }}
+                                                        />
+                                                    )}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleExportAllAssets}
+                                                    disabled={!selectedSong || isExporting || files.length === 0}
+                                                    aria-live="polite"
+                                                    className="relative overflow-hidden w-full sm:w-auto h-[52px] px-5 rounded-[10px] border border-white/[.12] text-slate-200 flex items-center justify-center gap-2.5 font-semibold text-sm backdrop-blur-sm hover:bg-white/[.04] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    {exportState.type === 'phira' ? (
+                                                        <>
+                                                            <Spinner />
+                                                            <span>导出中...</span>
+                                                        </>
+                                                    ) : exportState.type === 'chart' ? (
+                                                        // 另一个导出在跑，说明为什么这个点不了
+                                                        '等待中'
+                                                    ) : (
+                                                        '导出全部资源'
+                                                    )}
+                                                    {exportState.type === 'phira' && (
+                                                        <div
+                                                            className="absolute bottom-0 left-0 h-[3px] bg-[rgba(34,211,238,.6)] transition-[width] duration-150"
+                                                            style={{ width: `${exportState.progress.toFixed(0)}%` }}
+                                                        />
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* 谱面分享卡片入口：选中歌曲后即可生成（可在设置里关闭） */}
+                                    {selectedSong && settings.shareCardEnabled && (
+                                        <div className="mt-5 flex justify-center">
                                             <button
                                                 type="button"
-                                                onClick={handleExportChart}
-                                                disabled={isExporting}
-                                                aria-live="polite"
-                                                className={`export-glow relative overflow-hidden w-full sm:w-auto sm:min-w-[220px] h-[52px] rounded-[10px] bg-[#22d3ee] hover:bg-[#67e8f9] text-[#06141a] flex items-center justify-center gap-2.5 font-bold text-[15px] tracking-[.04em] transition-colors disabled:cursor-not-allowed disabled:bg-[#22d3ee]/40`}
+                                                onClick={() => setIsShareCardOpen(true)}
+                                                className="px-5 py-2.5 font-bold rounded-lg shadow-md transition-colors duration-200 flex items-center justify-center bg-cyan-700 hover:bg-cyan-800 text-white"
                                             >
-                                                {exportState.type === 'chart' ? (
-                                                    <>
-                                                        <Spinner />
-                                                        <span>导出中...</span>
-                                                    </>
-                                                ) : selectedDifficulty ? (
-                                                    `导出为谱面（${selectedDifficulty}）`
-                                                ) : (
-                                                    '导出全部难度'
-                                                )}
-                                                {exportState.type === 'chart' && (
-                                                    <div
-                                                        className="absolute bottom-0 left-0 h-[3px] bg-[#06141a]/40 transition-[width] duration-150"
-                                                        style={{ width: `${exportState.progress.toFixed(0)}%` }}
-                                                    />
-                                                )}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={handleExportAllAssets}
-                                                disabled={!selectedSong || isExporting || files.length === 0}
-                                                aria-live="polite"
-                                                className="relative overflow-hidden w-full sm:w-auto h-[52px] px-5 rounded-[10px] border border-white/[.12] text-slate-200 flex items-center justify-center gap-2.5 font-semibold text-sm backdrop-blur-sm hover:bg-white/[.04] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                {exportState.type === 'phira' ? (
-                                                    <>
-                                                        <Spinner />
-                                                        <span>导出中...</span>
-                                                    </>
-                                                ) : exportState.type === 'chart' ? (
-                                                    // 另一个导出在跑，说明为什么这个点不了
-                                                    '等待中'
-                                                ) : (
-                                                    '导出全部资源'
-                                                )}
-                                                {exportState.type === 'phira' && (
-                                                    <div
-                                                        className="absolute bottom-0 left-0 h-[3px] bg-[rgba(34,211,238,.6)] transition-[width] duration-150"
-                                                        style={{ width: `${exportState.progress.toFixed(0)}%` }}
-                                                    />
-                                                )}
+                                                生成分享卡片
                                             </button>
                                         </div>
+                                    )}
                                     </div>
-                                )}
-
-                                {/* 谱面分享卡片入口：选中歌曲后即可生成（可在设置里关闭） */}
-                                {selectedSong && settings.shareCardEnabled && (
-                                    <div className="mt-5 flex justify-center">
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsShareCardOpen(true)}
-                                            className="px-5 py-2.5 font-bold rounded-lg shadow-md transition-colors duration-200 flex items-center justify-center bg-cyan-700 hover:bg-cyan-800 text-white"
-                                        >
-                                            生成分享卡片
-                                        </button>
-                                    </div>
-                                )}
                                 </div>
-                            </div>
-                        )}
-                    </section>
-                </main>
+                            )}
+                        </section>
+                    </main>
 
-                <footer className="flex-none min-h-10 flex flex-wrap items-center justify-center text-center gap-x-6 gap-y-0.5 px-4 sm:px-6 py-2 border-t border-white/[.1] bg-[#05070a] text-xs text-slate-500">
-                    <span>
-                        源码见{' '}
-                        <a href="https://github.com/swordalt/phigros-chart-downloader/" target="_blank" rel="noreferrer" className="text-[#22d3ee] hover:text-[#67e8f9]">
-                            GitHub
-                        </a>
-                        ，欢迎点个 star。
-                    </span>
-                    <span className="hidden sm:inline">所有资源版权归各自所有者所有。</span>
-                    <span>项目由「sword」创建。| 网站使用 AI 和其他工具优化。</span>
-                </footer>
-            </div>
+                    <footer className="flex-none min-h-10 flex flex-wrap items-center justify-center text-center gap-x-6 gap-y-0.5 px-4 sm:px-6 py-2 border-t border-white/[.1] bg-[#05070a] text-xs text-slate-500">
+                        <span>
+                            源码见{' '}
+                            <a href="https://github.com/swordalt/phigros-chart-downloader/" target="_blank" rel="noreferrer" className="text-[#22d3ee] hover:text-[#67e8f9]">
+                                GitHub
+                            </a>
+                            ，欢迎点个 star。
+                        </span>
+                        <span className="hidden sm:inline">所有资源版权归各自所有者所有。</span>
+                        <span>项目由「sword」创建。| 网站使用 AI 和其他工具优化。</span>
+                    </footer>
+                </div>
+            )}
 
             {errorDialog && (
                 <NoticeDialog
