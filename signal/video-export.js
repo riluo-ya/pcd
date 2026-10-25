@@ -109,7 +109,10 @@ async function encodeAudio({ start, end, onStage }) {
     output: (chunk, meta) => {
       const bytes = new Uint8Array(chunk.byteLength);
       chunk.copyTo(bytes);
-      samples.push({ data: bytes, duration: chunk.duration ?? AAC_FRAME_SAMPLES });
+      // 每帧固定 1024 采样。不要读 chunk.duration —— 它的单位是微秒，
+      // 当成采样数会让每帧被算成约 0.53 秒，整条音轨变成几百秒，
+      // 播放器拿音轨当主时钟时画面就会被压缩快进。
+      samples.push({ data: bytes, duration: AAC_FRAME_SAMPLES });
       if (!description && meta && meta.decoderConfig && meta.decoderConfig.description) {
         description = new Uint8Array(meta.decoderConfig.description);
       }
