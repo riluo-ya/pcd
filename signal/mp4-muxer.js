@@ -5,8 +5,24 @@
    moov 里每个 track 一套 stbl（stsd / stts / stsc / stsz / co64），
    视频额外写 stss 标记关键帧，否则播放器拖动进度条会花屏。 */
 
-/** AAC 一帧固定 1024 采样，编码器输出的 duration 也以此为单位 */
+/** AAC 一帧固定 1024 采样 */
 export const AAC_FRAME_SAMPLES = 1024;
+
+/**
+ * 时间基准（timescale）的选择很关键，别改回 fps。
+ * 早期版本让视频轨 timescale = fps（30fps 时就是 1/30 秒一个单位），
+ * 虽然数学上等价且 ffmpeg 认，但大量播放器/硬解会误读这么低的基准，
+ * 表现就是「画面和声音一起变快」。
+ *
+ * 这里改用业界通用做法：
+ *   - 视频轨：fps * 1000，每帧 delta 恒为 1000（即 1 毫秒）
+ *   - movie：1000（毫秒）
+ *   - 音频轨：采样率（44100 等），delta 为采样数
+ * 这样 fps 取 1–120 任意整数时 delta 都是整数，不会出现非整数时长。
+ */
+const MOVIE_TIMESCALE = 1000;
+const videoTimescale = fps => fps * 1000;
+const VIDEO_SAMPLE_DELTA = 1000;
 
 const str4 = s => [s.charCodeAt(0), s.charCodeAt(1), s.charCodeAt(2), s.charCodeAt(3)];
 const fourCC = s => new Uint8Array(str4(s));
@@ -235,10 +251,11 @@ export function buildMp4({ video, audio }) {
   if (!video || !video.samples || !video.samples.length) {
     throw new Error('没有视频帧，无法封装 MP4。');
   }
-  const movieTimescale = video.frameRate;
+  const movieTimescale = MOVIE_TIMESCALE;
 
-  const videoSamples = video.samples.map(s => ({ track: 0, data: s.data, isKey: !!s.isKey, delta: 1 }));
-  const videoDurationUs = videoSamples.length * 1e6 / video.frameRate;
+  const vTimescale = videoTimescale(video.frameRate);
+  const videoSamples = video.samples.map(s => ({ track: 0, data: s.data, isKey: !!s.isKey, delta: VIDEO_SAMPLE_DELTA }));
+  const videoDurationUs = videoSamples.length * VIDEO_SAMPLE_DELTA * 1e6 / vTimescale;
   // 以视频为主时间轴：音频多出来的尾部一律裁掉。
   // 否则音频比画面长时，画面播完声音还在响，观感就是「声音在画面之后才出现」。
   let audioSamples = (audio && audio.samples && audio.samples.length)
@@ -276,10 +293,11 @@ export function buildMp4({ video, audio }) {
     }
   }
 
-  const videoDuration = totalVideo;
+  const videoDuration = totalVideo * VIDEO_SAMPLE_DELTA;   // 视频轨自身时间基准下
   const audioTotalSamples = audioSamples.reduce((n, s) => n + s.delta, 0);
+  const videoSeconds = totalVideo / video.frameRate;
   // 总时长以视频为准（画面是主体），音频已被裁到不超过它
-  const movieDuration = videoDuration;
+  const movieDuration = Math.round(videoSeconds * movieTimescale);
 
   const trackOf = t => {
     const samples = ordered.filter(s => s.track === t);
@@ -299,10 +317,10 @@ export function buildMp4({ video, audio }) {
     const aOffsets = hasAudio ? offsets.filter((_, i) => ordered[i].track === 1) : [];
 
     const vTrak = box('trak',
-      // 视频 media timescale 与 movie timescale 相同，duration 可直接用
-      tkhd(1, videoDuration, video.width, video.height, false),
+      // tkhd 用 movie 基准（毫秒），mdhd 用轨道自身基准
+      tkhd(1, movieDuration, video.width, video.height, false),
       box('mdia',
-        mdhd(movieTimescale, videoDuration),
+        mdhd(vTimescale, videoDuration),
         hdlr('vide'),
         box('minf',
           box('vmhd', u32(1), u16(0), u16(0), u16(0), u16(0)),
