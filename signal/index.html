@@ -26,6 +26,14 @@
     .pcd-credit a{color:#9ca3af;text-decoration:none}
     .pcd-credit a:hover{color:#d9e1a1;text-decoration:underline}
     @media (max-width:640px){.pcd-credit{font-size:10px;padding:3px 7px;right:6px;bottom:6px}}
+    /* PCD 二次开发：返回导航中心按钮 */
+    .pcd-back{display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:13px;color:#b6b8bc;
+      text-decoration:none;border:1px solid #3c3f43;border-radius:7px;padding:7px 13px;
+      min-height:34px;line-height:1;transition:color .15s,border-color .15s,background .15s}
+    .pcd-back:hover{color:#d9e1a1;border-color:#6e7278;background:rgba(255,255,255,.04)}
+    .pcd-back:active{transform:translateY(1px)}
+    .pcd-back-ico{font-size:15px;line-height:1}
+    @media (max-width:640px){.pcd-back{padding:0 12px;min-height:40px;font-size:14px;gap:0}.pcd-back-txt{display:none}}
   </style>
   <script>
   /* ==========================================================================
@@ -103,7 +111,15 @@
 </head>
 <body>
   <header class="app-header">
-    <div class="identity"><span class="wordmark">SIGNAL<span class="wordmark-dot">.</span></span></div>
+    <div class="identity">
+      <!-- PCD 二次开发：返回导航中心。signal/ 是子目录，站点根在上一层 -->
+      <a class="pcd-back" href="../home.html" aria-label="返回导航中心">
+        <span class="pcd-back-ico" aria-hidden="true">←</span>
+        <span class="pcd-back-txt">返回导航</span>
+      </a>
+      <span class="header-divider" aria-hidden="true"></span>
+      <span class="wordmark">SIGNAL<span class="wordmark-dot">.</span></span>
+    </div>
     <a class="github-link" href="https://github.com/Lylighte/signal-replica" target="_blank" rel="noopener noreferrer">GitHub</a>
   </header>
   <main class="workspace">
