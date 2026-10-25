@@ -44,6 +44,16 @@
         .question-card { background: var(--card-bg); border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: var(--shadow-lg); border: 1px solid rgba(255,255,255,0.6); touch-action: manipulation; }
         .q-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 16px; line-height: 1.5; display: flex; gap: 8px; }
         .q-index { color: var(--primary); font-weight: bold; }
+        /* PCD：题目来源标签（内置 / 投稿） */
+        .q-source {
+            display: inline-flex; align-items: center; flex-shrink: 0;
+            font-size: 0.7rem; font-weight: 700; line-height: 1;
+            padding: 3px 8px; border-radius: 99px;
+            letter-spacing: 0.2px; white-space: nowrap;
+        }
+        .q-source.builtin { color: #4b5563; background: #f1f5f9; border: 1px solid #e2e8f0; }
+        .q-source.contribute { color: #92400e; background: #fffbeb; border: 1px solid #fde68a; }
+        .q-text { min-width: 0; flex: 1; }
         .options-grid { display: grid; gap: 12px; }
         .option-item { display: flex; align-items: center; padding: 14px 16px; border: 2px solid var(--border-color); border-radius: 12px; cursor: pointer; transition: all 0.2s ease; background: white; }
         .option-item:hover { border-color: var(--primary); background: #f9fafb; }
@@ -722,7 +732,11 @@
             currentQuestions.forEach((q, index) => {
                 const card = document.createElement('div');
                 card.className = 'question-card';
-                const titleHtml = `<div class="q-title"><span class="q-index">${String.fromCharCode(65 + index)}.</span> ${escapeHtml(q.title)}</div>`;
+                // 老题库没有 source 字段，一律按「内置」处理，避免出现空白标签
+                const srcId = (q.source === 'contribute') ? 'contribute' : 'builtin';
+                const srcLabel = srcId === 'contribute' ? '投稿' : '内置';
+                const srcTag = `<span class="q-source ${srcId}" title="${srcLabel}题目">${srcLabel}</span>`;
+                const titleHtml = `<div class="q-title"><span class="q-index">${String.fromCharCode(65 + index)}.</span>${srcTag} <span class="q-text">${escapeHtml(q.title)}</span></div>`;
                 let optionsHtml = '<div class="options-grid">';
                 q.renderedOptions.forEach((opt, optIndex) => {
                     const letter = String.fromCharCode(65 + optIndex);
