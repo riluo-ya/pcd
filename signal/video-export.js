@@ -225,12 +225,15 @@ export async function exportVideo({
       video: { codecDescription: description, width, height, frameRate: fps, samples: videoSamples, bitrate },
       audio
     });
+    // 导出往往只要几秒就完成（编码走 GPU，很快），用户容易怀疑
+    // 「是不是没渲染完」。所以把实际时长一并回传，让界面直接显示出来核对。
+    const durationSeconds = videoSamples.length / fps;
     // returnRaw 只给测试用：帧数据和 blob 各占一份内存，默认不回传，
     // 否则几百 MB 的导出会让内存占用翻倍。
     return returnRaw
-      ? { blob, frameCount, width, height, fps, hasAudio: !!audio,
+      ? { blob, frameCount, width, height, fps, durationSeconds, hasAudio: !!audio,
           rawVideo: { codecDescription: description, width, height, frameRate: fps, samples: videoSamples } }
-      : { blob, frameCount, width, height, fps, hasAudio: !!audio };
+      : { blob, frameCount, width, height, fps, durationSeconds, hasAudio: !!audio };
   } catch (error) {
     release();
     throw error;
