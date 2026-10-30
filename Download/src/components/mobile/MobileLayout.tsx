@@ -3,13 +3,12 @@ import { Song, SortConfig, FileInfo } from '../../types';
 import { MobileLibrary } from './MobileLibrary';
 import { MobileSongView } from './MobileSongView';
 import { BottomSheet } from './BottomSheet';
-import { SongFilterPanel } from '../SongFilterPanel';
 import { SongFilter } from '../../hooks/useSongFilter';
 
 // 推入歌曲页时打的 history 标记，让系统返回手势能回到列表
 const HISTORY_KEY = 'pcdSongView';
 
-type Sheet = 'menu' | 'filter';
+type Sheet = 'menu' | 'range';
 
 interface MobileLayoutProps {
     songs: Song[];
@@ -188,26 +187,58 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
         </div>
     );
 
-    const renderFilter = () => (
-        <div className="flex flex-col gap-3">
+    /** 定数区间：与上游一致，只有 MIN / MAX 两个输入 */
+    const rangeInput = 'w-full h-12 rounded-[10px] bg-white/[.04] border border-white/[.08] text-center font-mono text-base font-medium text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-[rgba(34,211,238,.45)] disabled:opacity-50';
+
+    const renderRange = () => (
+        <div className="flex flex-col gap-3.5">
             <div className="flex flex-col gap-0.5">
-                <span className={eyebrow}>筛选</span>
+                <span className={eyebrow}>DIFFICULTY RANGE</span>
                 <span id="mobile-sheet-title" className="text-[21px] font-semibold text-slate-100">
-                    按难度 / 定数 / 谱师 / 曲师
+                    Lv {filter.rangeLabel}
                 </span>
             </div>
-            <SongFilterPanel
-                filter={filter}
-                songs={songs}
-                filteredCount={filter.displayedSongs.length}
-            />
-            <button
-                type="button"
-                onClick={closeSheet}
-                className="h-12 rounded-[10px] bg-[#22d3ee] text-[#06141a] text-sm font-bold"
-            >
-                查看 {filter.displayedSongs.length} 首
-            </button>
+            <div className="flex items-start gap-2.5">
+                {[
+                    { label: 'MIN', value: filter.minInput, set: filter.setMinInput, placeholder: filter.difficultyBounds?.min },
+                    { label: 'MAX', value: filter.maxInput, set: filter.setMaxInput, placeholder: filter.difficultyBounds?.max },
+                ].map((field, i) => (
+                    <React.Fragment key={field.label}>
+                        {i === 1 && <span className="pt-5 text-slate-600">–</span>}
+                        <label className="flex-1 flex flex-col gap-1.5">
+                            <span className="font-mono text-[10px] font-medium tracking-[.14em] text-slate-500">{field.label}</span>
+                            <input
+                                type="number"
+                                inputMode="decimal"
+                                step={0.1}
+                                min={filter.difficultyBounds?.min}
+                                max={filter.difficultyBounds?.max}
+                                value={field.value}
+                                onChange={e => field.set(e.target.value)}
+                                placeholder={field.placeholder !== undefined ? String(field.placeholder) : ''}
+                                disabled={!filter.difficultyBounds}
+                                className={rangeInput}
+                            />
+                        </label>
+                    </React.Fragment>
+                ))}
+            </div>
+            <div className="flex gap-2.5">
+                <button
+                    type="button"
+                    onClick={() => { filter.setMinInput(''); filter.setMaxInput(''); }}
+                    className="h-12 px-[18px] rounded-[10px] border border-white/[.12] text-sm font-semibold text-slate-200"
+                >
+                    Reset
+                </button>
+                <button
+                    type="button"
+                    onClick={closeSheet}
+                    className="flex-1 h-12 rounded-[10px] bg-[#22d3ee] text-[#06141a] text-sm font-bold"
+                >
+                    Show {filter.displayedSongs.length} songs
+                </button>
+            </div>
         </div>
     );
 
@@ -224,7 +255,7 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
                 sortConfig={sortConfig}
                 onSortConfigChange={onSortConfigChange}
                 onOpenMenu={() => openSheet('menu')}
-                onOpenFilter={() => openSheet('filter')}
+                onOpenRange={() => openSheet('range')}
                 bulkPanel={bulkPanel}
             />
 
@@ -241,7 +272,7 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
             )}
 
             <BottomSheet open={sheet !== null} onClose={closeSheet} labelledBy="mobile-sheet-title">
-                {sheetContent === 'menu' ? renderMenu() : renderFilter()}
+                {sheetContent === 'menu' ? renderMenu() : renderRange()}
             </BottomSheet>
         </div>
     );

@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Spinner } from '../Spinner';
-import { ErrorIcon, MagnifyingGlassIcon, ChevronDownIcon, FunnelIcon, ArrowsUpDownIcon } from '../Icons';
+import { ErrorIcon, MagnifyingGlassIcon, ChevronDownIcon, ArrowsUpDownIcon } from '../Icons';
 import { Song, SortConfig } from '../../types';
 import { SongFilter } from '../../hooks/useSongFilter';
 import { ghRaw } from '../../utils/sources';
@@ -15,7 +15,7 @@ interface MobileLibraryProps {
     sortConfig: SortConfig;
     onSortConfigChange: (config: SortConfig) => void;
     onOpenMenu: () => void;
-    onOpenFilter: () => void;
+    onOpenRange: () => void;
     /** 批量下载模式：替换掉列表、筛选和搜索框 */
     bulkPanel?: React.ReactNode;
 }
@@ -59,10 +59,15 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
     sortConfig,
     onSortConfigChange,
     onOpenMenu,
-    onOpenFilter,
+    onOpenRange,
     bulkPanel,
 }) => {
-    const { searchTerm, setSearchTerm, displayedSongs, isSuggestion, activeFilterCount } = filter;
+    const {
+        searchTerm, setSearchTerm,
+        onlyHasAt, setOnlyHasAt,
+        isRangeActive, rangeLabel,
+        displayedSongs, isSuggestion,
+    } = filter;
     const parentRef = useRef<HTMLDivElement>(null);
 
     const rowVirtualizer = useVirtualizer({
@@ -164,12 +169,20 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
                     <div className="flex items-center gap-2 px-4 pb-3 overflow-x-auto">
                         <button
                             type="button"
-                            onClick={onOpenFilter}
-                            aria-label="筛选"
-                            className={`${chip} gap-1.5 pl-3 pr-2.5 font-mono text-xs font-medium ${activeFilterCount > 0 ? 'border-[rgba(34,211,238,.4)] bg-[rgba(34,211,238,.1)] text-[#22d3ee]' : 'border-white/[.08] text-slate-400'}`}
+                            aria-pressed={onlyHasAt}
+                            onClick={() => setOnlyHasAt(v => !v)}
+                            className={`${chip} gap-1.5 px-3 font-mono text-xs font-semibold ${onlyHasAt ? 'border-[rgba(74,222,128,.35)] bg-[rgba(74,222,128,.12)] text-[#4ade80]' : 'border-white/[.08] text-slate-200'}`}
                         >
-                            <FunnelIcon className="w-3.5 h-3.5" />
-                            筛选{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}
+                            Has AT
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onOpenRange}
+                            aria-label={`Difficulty range ${rangeLabel}`}
+                            className={`${chip} gap-1 pl-3 pr-2.5 font-mono text-xs font-medium ${isRangeActive ? 'border-[rgba(34,211,238,.4)] bg-[rgba(34,211,238,.1)] text-[#22d3ee]' : 'border-white/[.08] text-slate-400'}`}
+                        >
+                            Lv {rangeLabel}
+                            <ChevronDownIcon className="w-3 h-3 [stroke-width:2]" />
                         </button>
                         <button
                             type="button"
@@ -182,8 +195,8 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
                         </button>
                         <span className="flex-1" />
                         <span className="flex-none font-mono text-[10px] font-medium tracking-[.12em] text-slate-600 whitespace-nowrap">
-                            {isSuggestion && <span className="text-[#22d3ee]">别名 · </span>}
-                            {isLoading ? '—' : `${displayedSongs.length} 首`}
+                            {isSuggestion && <span className="text-[#22d3ee]">DID YOU MEAN · </span>}
+                            {isLoading ? '—' : `${displayedSongs.length} SONGS`}
                         </span>
                     </div>
                 )}
