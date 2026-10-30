@@ -1,23 +1,14 @@
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Spinner } from './Spinner';
-import { songNameAliases } from '../song-aliases';
 import { useSettings } from '../contexts/SettingsContext';
 import { getSongEffect } from '../song-effects';
 import { Song, SortConfig, SortType, SortDirection } from '../types';
 import { ChevronDownIcon, ErrorIcon, MagnifyingGlassIcon, ArrowsUpDownIcon, CheckIcon, FunnelIcon, XMarkIcon } from './Icons';
 import { NameCombobox } from './NameCombobox';
-import { normalizeSearchString } from '../hooks/useSongFilter';
-import {
-    QuickFilters,
-    emptyQuickFilters,
-    countActiveQuickFilters,
-    applyQuickFilters,
-    collectCharters,
-    collectComposers,
-    DIFFS,
-} from '../utils/bulkFilters';
+import { useSongFilter } from '../hooks/useSongFilter';
+import { DIFFS } from '../utils/bulkFilters';
 
 interface SongSelectorProps {
   isLoading: boolean;
@@ -34,90 +25,33 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
     const [isOpen, setIsOpen] = useState(false);
     const [isSortOpen, setIsSortOpen] = useState(false);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
-    const [filters, setFilters] = useState<QuickFilters>(emptyQuickFilters);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
     const wrapperRef = useRef<HTMLDivElement>(null);
     const sortWrapperRef = useRef<HTMLDivElement>(null);
     const filterWrapperRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const parentRef = useRef<HTMLUListElement>(null);
 
-    /** 曲库里出现过的谱师 / 曲师，用于筛选下拉 */
-    const charterOptions = useMemo(() => collectCharters(songs), [songs]);
-    const composerOptions = useMemo(() => collectComposers(songs), [songs]);
-    const activeFilterCount = useMemo(() => countActiveQuickFilters(filters), [filters]);
-
-    const setFilter = <K extends keyof QuickFilters>(key: K, value: QuickFilters[K]) =>
-        setFilters(prev => ({ ...prev, [key]: value }));
-
-    const toggleDiffFilter = (d: string) =>
-        setFilters(prev => ({
-            ...prev,
-            requireDiffs: prev.requireDiffs.includes(d)
-                ? prev.requireDiffs.filter(x => x !== d)
-                : [...prev.requireDiffs, d],
-        }));
-
-    /** 筛选后的曲库，作为搜索的候选集 */
-    const filteredSongs = useMemo(() => applyQuickFilters(songs, filters), [songs, filters]);
-
-    useEffect(() => {
-        const handler = setTimeout(() => {
-            setDebouncedSearchTerm(searchTerm);
-        }, 200);
-        return () => clearTimeout(handler);
-    }, [searchTerm]);
-
     /**
-     * 别名表必须在「筛选后」的曲库里查，不能用完整曲库。
-     * 否则筛选 + 搜别名时，别名会命中一首不满足筛选条件的曲子并直接显示出来，
-     * 表现就是「筛了跟没筛一样」。
+     * 筛选与搜索全部交给 useSongFilter，与手机端（MobileLibrary）共用同一份实现。
+     * 之前这里抄了一份独立逻辑，导致两端行为不一致：
+     * 归一化规则不同（这里只去掉点号，hook 还去掉空格引号连字符），
+     * 别名表也查错了曲库（见 hook 里的注释）。
      */
-    const aliasList = useMemo(() => {
-        const list: { alias: string, song: Song }[] = [];
-        if (filteredSongs.length > 0) {
-            for (const songName in songNameAliases) {
-                const song = filteredSongs.find(s => s.name === songName);
-                if (song) {
-                    const aliases = songNameAliases[songName];
-                    for (const alias of aliases) {
-                        list.push({ alias: alias.toLowerCase(), song });
-                    }
-                }
-            }
-        }
-        return list;
-    }, [filteredSongs]);
-
-    const { displayedSongs, isSuggestion } = useMemo(() => {
-        if (!debouncedSearchTerm) {
-            return { displayedSongs: filteredSongs, isSuggestion: false };
-        }
-        const normalizedSearchTerm = normalizeSearchString(debouncedSearchTerm);
-
-        // 曲名或曲师命中都算直接命中（与上游一致）
-        const directMatches = filteredSongs.filter(song =>
-            normalizeSearchString(song.name).includes(normalizedSearchTerm) ||
-            normalizeSearchString(song.composer || '').includes(normalizedSearchTerm)
-        );
-
-        if (directMatches.length > 0) {
-            return { displayedSongs: directMatches, isSuggestion: false };
-        }
-        
-        // No direct matches, check aliases.
-        const aliasMatches = aliasList
-            .filter(item => normalizeSearchString(item.alias).includes(normalizedSearchTerm))
-            .map(item => item.song);
-        
-        if (aliasMatches.length > 0) {
-            const uniqueAliasMatches = Array.from(new Map(aliasMatches.map(song => [song.id, song])).values());
-            return { displayedSongs: uniqueAliasMatches, isSuggestion: true };
-        }
-
-        return { displayedSongs: [], isSuggestion: false };
-    }, [filteredSongs, debouncedSearchTerm, aliasList]);
+    const {
+        filters,
+        setFilters,
+        setFilter,
+        toggleDiffFilter,
+        resetFilters,
+        searchTerm,
+        setSearchTerm,
+        filteredSongs,
+        displayedSongs,
+        isSuggestion,
+        charterOptions,
+        composerOptions,
+        activeFilterCount,
+    } = useSongFilter(songs);
 
 
     useEffect(() => {
@@ -271,7 +205,7 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
                             {activeFilterCount > 0 && (
                                 <button
                                     type="button"
-                                    onClick={() => setFilters(emptyQuickFilters)}
+                                    onClick={resetFilters}
                                     className="text-xs text-slate-400 hover:text-brand-cyan flex items-center gap-1"
                                 >
                                     <XMarkIcon className="w-3.5 h-3.5" />
@@ -311,7 +245,7 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
                     </div>
                     <button
                         type="button"
-                        onClick={() => setFilters(emptyQuickFilters)}
+                        onClick={resetFilters}
                         className="text-slate-500 hover:text-slate-300 flex-shrink-0"
                         aria-label="清除筛选"
                     >
@@ -553,7 +487,7 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
                                             </p>
                                             <button
                                                 type="button"
-                                                onClick={() => setFilters(emptyQuickFilters)}
+                                                onClick={resetFilters}
                                                 className="mt-2 text-xs text-brand-cyan hover:underline"
                                             >
                                                 清除全部筛选
@@ -600,7 +534,7 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
                             {activeFilterCount > 0 && (
                                 <button
                                     type="button"
-                                    onClick={() => setFilters(emptyQuickFilters)}
+                                    onClick={resetFilters}
                                     className="text-xs text-slate-400 hover:text-brand-cyan flex items-center gap-1"
                                 >
                                     <XMarkIcon className="w-3.5 h-3.5" />

@@ -27,6 +27,9 @@ export interface SongFilter {
     searchTerm: string;
     setSearchTerm: (v: string) => void;
 
+    /** 筛选后的曲库（搜索之前的候选集），用于显示「命中 X / Y 首」 */
+    filteredSongs: Song[];
+
     /** 最终要渲染的曲库，以及「是否来自别名猜测」 */
     displayedSongs: Song[];
     isSuggestion: boolean;
@@ -130,6 +133,7 @@ export function useSongFilter(songs: Song[]): SongFilter {
         resetFilters,
         searchTerm,
         setSearchTerm,
+        filteredSongs,
         displayedSongs,
         isSuggestion,
         isSearching: searchTerm !== debouncedSearchTerm,
