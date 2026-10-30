@@ -224,38 +224,38 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
             </div>
                 </div>
 
-                {/* 计数 + Has AT + 定数区间：与上游一致的筛选行 */}
+                {/* 计数 + AT 开关 + 定数区间：结构与上游一致，文案保持中文 */}
                 <div className="px-4 pb-2 flex items-center gap-1.5">
                     <span className="flex-1 min-w-0 truncate font-mono text-[10px] font-medium tracking-[.12em] text-slate-600">
-                        {isLoading ? '— SONGS | ' : `${displayedSongs.length} SONGS | `}
-                        {isSuggestion && <span className="text-[#22d3ee]"> · DID YOU MEAN</span>}
+                        {isLoading ? '— 首 | ' : `${displayedSongs.length} 首 | `}
+                        {isSuggestion && <span className="text-[#22d3ee]"> · 别名匹配</span>}
                     </span>
                     <button
                         type="button"
                         aria-pressed={onlyHasAt}
                         onClick={() => setOnlyHasAt(v => !v)}
-                        title={onlyHasAt ? 'Showing only songs with an AT chart' : 'Show only songs with an AT chart'}
+                        title={onlyHasAt ? '只显示有 AT 难度的歌曲' : '只显示有 AT 难度的歌曲'}
                         className={`font-mono text-[11px] font-semibold px-2 py-1 rounded-md transition-colors ${onlyHasAt ? 'text-green-400 bg-green-400/[.12]' : 'text-white hover:bg-white/[.06]'}`}
                     >
-                        Has AT
+                        有 AT
                     </button>
                     <div ref={rangeWrapperRef} className="relative">
                         <button
                             type="button"
                             onClick={() => setIsRangeOpen(o => !o)}
                             aria-expanded={isRangeOpen}
-                            title="Filter by difficulty range"
+                            title="按定数区间筛选"
                             className={`font-mono text-[11px] font-medium px-1.5 py-1 rounded-md transition-colors hover:bg-white/[.04] ${isRangeActive ? 'text-[#22d3ee]' : 'text-slate-500 hover:text-slate-300'}`}
                         >
                             {rangeLabel}
                         </button>
                         {isRangeOpen && (
                             <div className="motion-dropdown absolute right-0 z-40 mt-2 w-56 p-3 rounded-xl border border-white/[.08] bg-[rgba(12,15,22,.98)] shadow-[0_20px_50px_rgba(0,0,0,.5)] flex flex-col gap-2.5">
-                                <span className="font-mono text-[10px] font-medium tracking-[.14em] text-slate-500">DIFFICULTY RANGE</span>
+                                <span className="font-mono text-[10px] font-medium tracking-[.14em] text-slate-500">定数区间</span>
                                 <div className="flex items-center gap-2">
                                     {[
-                                        { value: minInput, set: setMinInput, placeholder: difficultyBounds?.min, label: 'Minimum difficulty' },
-                                        { value: maxInput, set: setMaxInput, placeholder: difficultyBounds?.max, label: 'Maximum difficulty' },
+                                        { value: minInput, set: setMinInput, placeholder: difficultyBounds?.min, label: '最低定数' },
+                                        { value: maxInput, set: setMaxInput, placeholder: difficultyBounds?.max, label: '最高定数' },
                                     ].map((field, i) => (
                                         <React.Fragment key={field.label}>
                                             {i === 1 && <span className="text-slate-600">–</span>}
@@ -281,7 +281,7 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
                                     disabled={!minInput && !maxInput}
                                     className="self-start text-xs font-semibold text-slate-400 hover:text-white disabled:opacity-40 disabled:hover:text-slate-400"
                                 >
-                                    Reset range
+                                    重置区间
                                 </button>
                             </div>
                         )}

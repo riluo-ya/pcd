@@ -90,6 +90,20 @@ export const FAQPopup: React.FC<FAQPopupProps> = ({ isOpen, onClose }) => {
                     </button>
                 </div>
 
+                {/* 数据来源：读成功显示来源，失败显示「内置兜底」
+                    内置数据与 faq.json 内容一致，光看问答内容分不出来，
+                    必须把这行标识露出来，否则线上没生效也发现不了 */}
+                {!loading && (
+                    <div className="flex-none px-6 max-md:px-5 pt-3">
+                        <div className="flex items-center gap-2 text-[11px]">
+                            <span className={`flex-none w-1.5 h-1.5 rounded-full ${error ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                            <span className={error ? 'text-amber-300' : 'text-slate-400'}>
+                                {error ? '内置数据（在线 faq.json 加载失败）' : `数据来源：${sourceLabel}`}
+                            </span>
+                        </div>
+                    </div>
+                )}
+
                 {(notice || error) && (
                     <div className="flex-none px-6 max-md:px-5 pt-4">
                         {notice && (

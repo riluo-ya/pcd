@@ -187,13 +187,13 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
         </div>
     );
 
-    /** 定数区间：与上游一致，只有 MIN / MAX 两个输入 */
+    /** 定数区间：结构与上游一致（只有 MIN / MAX 两个输入），文案保持中文 */
     const rangeInput = 'w-full h-12 rounded-[10px] bg-white/[.04] border border-white/[.08] text-center font-mono text-base font-medium text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-[rgba(34,211,238,.45)] disabled:opacity-50';
 
     const renderRange = () => (
         <div className="flex flex-col gap-3.5">
             <div className="flex flex-col gap-0.5">
-                <span className={eyebrow}>DIFFICULTY RANGE</span>
+                <span className={eyebrow}>定数区间</span>
                 <span id="mobile-sheet-title" className="text-[21px] font-semibold text-slate-100">
                     Lv {filter.rangeLabel}
                 </span>
@@ -229,14 +229,14 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({
                     onClick={() => { filter.setMinInput(''); filter.setMaxInput(''); }}
                     className="h-12 px-[18px] rounded-[10px] border border-white/[.12] text-sm font-semibold text-slate-200"
                 >
-                    Reset
+                    重置
                 </button>
                 <button
                     type="button"
                     onClick={closeSheet}
                     className="flex-1 h-12 rounded-[10px] bg-[#22d3ee] text-[#06141a] text-sm font-bold"
                 >
-                    Show {filter.displayedSongs.length} songs
+                    查看 {filter.displayedSongs.length} 首
                 </button>
             </div>
         </div>

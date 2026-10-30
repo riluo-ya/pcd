@@ -87,9 +87,11 @@ export const AboutPopup: React.FC<AboutPopupProps> = ({ isOpen, onClose }) => {
                             </div>
                         ) : (
                             <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
-                                <span>
-                                    更新日志
-                                    {sourceLabel ? ` · 来源：${sourceLabel}` : ''}
+                                <span className="flex items-center gap-2">
+                                    <span className={`flex-none w-1.5 h-1.5 rounded-full ${error ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                                    <span className={error ? 'text-amber-300' : 'text-slate-500'}>
+                                        {error ? '内置数据（在线 changelog.json 加载失败）' : `更新日志 · 数据来源：${sourceLabel}`}
+                                    </span>
                                 </span>
                                 <button
                                     type="button"

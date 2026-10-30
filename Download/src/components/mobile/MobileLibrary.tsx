@@ -173,12 +173,12 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
                             onClick={() => setOnlyHasAt(v => !v)}
                             className={`${chip} gap-1.5 px-3 font-mono text-xs font-semibold ${onlyHasAt ? 'border-[rgba(74,222,128,.35)] bg-[rgba(74,222,128,.12)] text-[#4ade80]' : 'border-white/[.08] text-slate-200'}`}
                         >
-                            Has AT
+                            有 AT
                         </button>
                         <button
                             type="button"
                             onClick={onOpenRange}
-                            aria-label={`Difficulty range ${rangeLabel}`}
+                            aria-label={`定数区间 ${rangeLabel}`}
                             className={`${chip} gap-1 pl-3 pr-2.5 font-mono text-xs font-medium ${isRangeActive ? 'border-[rgba(34,211,238,.4)] bg-[rgba(34,211,238,.1)] text-[#22d3ee]' : 'border-white/[.08] text-slate-400'}`}
                         >
                             Lv {rangeLabel}
@@ -195,8 +195,8 @@ export const MobileLibrary: React.FC<MobileLibraryProps> = ({
                         </button>
                         <span className="flex-1" />
                         <span className="flex-none font-mono text-[10px] font-medium tracking-[.12em] text-slate-600 whitespace-nowrap">
-                            {isSuggestion && <span className="text-[#22d3ee]">DID YOU MEAN · </span>}
-                            {isLoading ? '—' : `${displayedSongs.length} SONGS`}
+                            {isSuggestion && <span className="text-[#22d3ee]">别名匹配 · </span>}
+                            {isLoading ? '—' : `${displayedSongs.length} 首`}
                         </span>
                     </div>
                 )}
