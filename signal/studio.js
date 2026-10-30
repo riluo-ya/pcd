@@ -202,7 +202,7 @@ async function runFrameExport(){
       link.download=`signal-${result.width}x${result.height}-${result.fps}fps.mp4`;link.click();
       setTimeout(()=>URL.revokeObjectURL(url),60000);
       const sec=(result.durationSeconds??result.frameCount/result.fps).toFixed(2);
-      status.textContent=`已导出 ${result.frameCount} 帧 MP4（时长 ${sec} 秒 · ${result.width} × ${result.height} · ${result.fps} FPS${result.hasAudio?' · 含音频':' · 无声'}）。如果觉得播放偏快，检查「结束时间」是否填小了。`;
+      status.textContent=`已导出 ${result.frameCount} 帧 MP4（时长 ${sec} 秒 · ${result.width} × ${result.height} · ${result.fps} FPS${result.hasAudio?' · 含音频':' · 无声'}）。如果觉得播放偏快，检查「结束时间」是否填小了。`+(result.warning?` 注意：${result.warning}`:'');
     }else{
       link.download=`signal-frames-${result.width}x${result.height}-${result.fps}fps.zip`;link.click();
       setTimeout(()=>URL.revokeObjectURL(url),60000);
