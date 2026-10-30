@@ -135,10 +135,22 @@
   height: 100dvh;
 }
 
+/* 弹窗高度：所有尺寸都要限制，不只是手机。
+   之前只在 max-width:767.98px 里定义了 height，平板（≥768px）拿不到任何高度限制，
+   面板高度由内容撑开 → 内容区的 flex-1 min-h-0 失效（父级没有确定高度）
+   → 超出视口的部分被 overflow-hidden 裁掉且滚不动，底部按钮点不到。
+   桌面用 max-height 留出外层 p-4 的上下边距（各 1rem）。 */
+.h-dialog-panel {
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+}
+
 @media (max-width: 767.98px) {
   .h-dialog-panel {
     height: calc(100vh - 10px);
     height: calc(100dvh - 10px);
+    /* 手机端改为整屏，不能让上面的 max-height 把它压矮 */
+    max-height: none;
   }
   .max-h-sheet {
     max-height: 86vh;
