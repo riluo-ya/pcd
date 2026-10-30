@@ -70,11 +70,16 @@ export function useSongFilter(songs: Song[]): SongFilter {
         return () => clearTimeout(handler);
     }, [searchTerm]);
 
+    /**
+     * 别名表必须在「筛选后」的曲库里查，不能用完整曲库。
+     * 否则筛选 + 搜别名时，别名会命中一首不满足筛选条件的曲子并直接显示出来，
+     * 表现就是「筛了跟没筛一样」。
+     */
     const aliasList = useMemo(() => {
         const list: { alias: string; song: Song }[] = [];
-        if (songs.length > 0) {
+        if (filteredSongs.length > 0) {
             for (const songName in songNameAliases) {
-                const song = songs.find(s => s.name === songName);
+                const song = filteredSongs.find(s => s.name === songName);
                 if (song) {
                     const aliases = songNameAliases[songName];
                     for (const alias of aliases) {
@@ -84,7 +89,7 @@ export function useSongFilter(songs: Song[]): SongFilter {
             }
         }
         return list;
-    }, [songs]);
+    }, [filteredSongs]);
 
     const { displayedSongs, isSuggestion } = useMemo(() => {
         if (!debouncedSearchTerm) {
@@ -92,8 +97,10 @@ export function useSongFilter(songs: Song[]): SongFilter {
         }
         const normalizedSearchTerm = normalizeSearchString(debouncedSearchTerm);
 
+        // 曲名或曲师命中都算直接命中（与上游一致）
         const directMatches = filteredSongs.filter(song =>
-            normalizeSearchString(song.name).includes(normalizedSearchTerm)
+            normalizeSearchString(song.name).includes(normalizedSearchTerm) ||
+            normalizeSearchString(song.composer || '').includes(normalizedSearchTerm)
         );
         if (directMatches.length > 0) {
             return { displayedSongs: directMatches, isSuggestion: false };

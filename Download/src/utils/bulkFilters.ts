@@ -256,7 +256,8 @@ export function applyQuickFilters(songs: Song[], f: QuickFilters): Song[] {
     return songs.filter(song => {
         // 必须存在的难度
         if (!noDiffFilter) {
-            const has = DIFFS.filter(d => levelOf(song, d) !== null);
+            // 显式标成 string[]：requireDiffs 是 string[]，否则 has.includes(d) 会类型报错
+            const has: string[] = DIFFS.filter(d => levelOf(song, d) !== null);
             if (!f.requireDiffs.every(d => has.includes(d))) return false;
         }
 

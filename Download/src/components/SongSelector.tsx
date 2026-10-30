@@ -8,6 +8,7 @@ import { getSongEffect } from '../song-effects';
 import { Song, SortConfig, SortType, SortDirection } from '../types';
 import { ChevronDownIcon, ErrorIcon, MagnifyingGlassIcon, ArrowsUpDownIcon, CheckIcon, FunnelIcon, XMarkIcon } from './Icons';
 import { NameCombobox } from './NameCombobox';
+import { normalizeSearchString } from '../hooks/useSongFilter';
 import {
     QuickFilters,
     emptyQuickFilters,
@@ -27,19 +28,6 @@ interface SongSelectorProps {
   sortConfig: SortConfig;
   onSortConfigChange: (config: SortConfig) => void;
 }
-
-// Add characters to this regex to ignore them in search.
-// For example, to ignore dots and dashes: /[.-]/g
-const IGNORED_SEARCH_CHARS_REGEX = /\./g;
-
-/**
- * Normalizes a string for searching by removing ignored characters and converting to lowercase.
- * @param str The string to normalize.
- * @returns The normalized string.
- */
-const normalizeSearchString = (str: string): string => {
-    return str.replace(IGNORED_SEARCH_CHARS_REGEX, '').toLowerCase();
-};
 
 export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, songs, selectedSong, onSongSelect, sortConfig, onSortConfigChange }) => {
     const { settings } = useSettings();
@@ -81,11 +69,16 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
         return () => clearTimeout(handler);
     }, [searchTerm]);
 
+    /**
+     * 别名表必须在「筛选后」的曲库里查，不能用完整曲库。
+     * 否则筛选 + 搜别名时，别名会命中一首不满足筛选条件的曲子并直接显示出来，
+     * 表现就是「筛了跟没筛一样」。
+     */
     const aliasList = useMemo(() => {
         const list: { alias: string, song: Song }[] = [];
-        if (songs.length > 0) {
+        if (filteredSongs.length > 0) {
             for (const songName in songNameAliases) {
-                const song = songs.find(s => s.name === songName);
+                const song = filteredSongs.find(s => s.name === songName);
                 if (song) {
                     const aliases = songNameAliases[songName];
                     for (const alias of aliases) {
@@ -95,7 +88,7 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
             }
         }
         return list;
-    }, [songs]);
+    }, [filteredSongs]);
 
     const { displayedSongs, isSuggestion } = useMemo(() => {
         if (!debouncedSearchTerm) {
@@ -103,8 +96,10 @@ export const SongSelector: React.FC<SongSelectorProps> = ({ isLoading, error, so
         }
         const normalizedSearchTerm = normalizeSearchString(debouncedSearchTerm);
 
+        // 曲名或曲师命中都算直接命中（与上游一致）
         const directMatches = filteredSongs.filter(song =>
-            normalizeSearchString(song.name).includes(normalizedSearchTerm)
+            normalizeSearchString(song.name).includes(normalizedSearchTerm) ||
+            normalizeSearchString(song.composer || '').includes(normalizedSearchTerm)
         );
 
         if (directMatches.length > 0) {
