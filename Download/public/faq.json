@@ -1,72 +1,40 @@
 {
+  "notice": "",
   "faqs": [
     {
-      "question": "怎么下载能在 Phira 或 RPE 里用的谱面？",
-      "answer": "从左侧列表挑一首曲子，选好难度（EZ / HD / IN / AT），然后点「导出谱面」即可。"
+      "question": "如何下载谱面以在 Phira 或 RPE 中使用？",
+      "answer": "从左侧列表选择一首歌曲，选好难度（EZ / HD / IN / AT），然后点「导出为谱面」即可。不指定难度时会导出这首歌的全部难度。",
+      "links": []
     },
     {
-      "question": "这些文件能在哪些程序里用？",
-      "answer": "试玩首选 Phira —— 新版本对官方谱面格式的兼容性很好。其他模拟器（如 phi-sim）虽然已停止维护，也照样能用。"
+      "question": "哪些程序可以使用这些文件？",
+      "answer": "游玩方面，Phira 有不错的支持，但在某些谱面中可能会出现视觉 bug。编辑方面，RPE 有不错的支持；只是不要尝试保存谱面，否则它会尝试转换为体积很大的 RPE json。其他编辑器如 phichain 也可能支持官方格式。",
+      "links": []
     },
     {
-      "question": "PEZ 文件是什么？",
-      "answer": "Phi Edit ZIP，本质上就是个 ZIP 包。多数程序都能识别处理，也可以在设置里把导出扩展名改成 ZIP。"
+      "question": "什么是 PEZ 文件？",
+      "answer": "PEZ 文件是 Phi Edit ZIP（PEZ），本质上就是一个 ZIP 包。大多数程序都能识别处理，也可以在设置里把导出扩展名改成通用的 ZIP。",
+      "links": []
     },
     {
-      "question": "为什么这里没有更新的曲子？",
-      "answer": "本站数据来自第三方 GitHub 仓库，上游没收录的新曲，这里就不会出现。"
+      "question": "为什么较新的歌曲没有出现在这里？",
+      "answer": "本网站依赖第三方 GitHub 仓库。如果上游还没有收录较新的内容，这里就不会显示。",
+      "links": []
     },
     {
-      "question": "网站打不开或一直报错怎么办？",
-      "answer": "先确认能访问 GitHub 且没有被限流。隐私类插件也可能拦截 raw.githubusercontent.com 的下载 —— 或者在设置里换一个加速源试试。"
-    },
-    {
-      "question": "为什么访问前要答题？",
-      "answer": "本站设置了答题鉴权，通过后凭证在本浏览器内有效 12 小时，过期重新答题即可。"
+      "question": "网站坏了，无法正常工作。",
+      "answer": "确保可以访问 GitHub，且没有被限流或封锁。同时检查浏览器扩展，如广告拦截器和隐私保护工具，它们可能会阻止 GitHub 原始文件。也可以试试在设置里切换加速源。",
+      "links": []
     },
     {
       "question": "为什么没有愚人节谱面和旧版（Legacy）谱面？",
       "answer": "这类谱面已经有不少专门的获取渠道，比如",
       "links": [
         {
-          "text": "Google 云端硬盘文件夹",
+          "text": "这个 Google 云端硬盘文件夹",
           "url": "https://drive.google.com/drive/folders/1LcJ2Ublu6TNNTqUph61ItzGwJTqG-IQu"
-        },
-        {
-          "text": "123网盘",
-          "url": "https://1812016671.share.123pan.cn/123pan/IBdrVv-qQPXd"
-        },
-        {
-          "text": "光鸭网盘",
-          "url": "https://www.guangyapan.com/s/1958461735220449280_aiK0qIqkk2LK6k-Z"
         }
-      ],
-      "link": {
-        "text": "Google 云端硬盘文件夹",
-        "url": "https://drive.google.com/drive/folders/1LcJ2Ublu6TNNTqUph61ItzGwJTqG-IQu"
-      }
-    },
-    {
-      "question": "为什么我下载的谱面没有“噪域”？",
-      "answer": "目前（20261024）Phira还不支持噪域的渲染，如果你需要噪域效果的话可以试试Phira-Pro这个项目",
-      "links": [
-        {
-          "text": "Github",
-          "url": "https://github.com/Phira-Pro/Phira-Pro"
-        },
-        {
-          "text": "蓝奏云（密码=phi）",
-          "url": "https://riluoya.lanzouu.com/b0zl72wdg"
-        },
-        {
-          "text": "安卓直链（pro作者提供）",
-          "url": "https://dl.phira.pro/latest/android"
-        }
-      ],
-      "link": {
-        "text": "Github",
-        "url": "https://github.com/Phira-Pro/Phira-Pro"
-      }
+      ]
     }
   ]
 }

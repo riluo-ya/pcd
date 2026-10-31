@@ -58,7 +58,7 @@ export const AboutPopup: React.FC<AboutPopupProps> = ({ isOpen, onClose }) => {
                 <div className="dialog-topline" style={{ background: 'linear-gradient(90deg, transparent, rgba(34,211,238,.7), transparent)' }} />
                 <div className="h-[68px] flex-none flex items-center justify-between gap-3 px-6 max-md:px-5 border-b border-white/[.06]">
                     <div className="flex flex-col">
-                        <span className="flex items-center gap-2 font-mono text-[10px] font-medium tracking-[.16em] uppercase text-[#22d3ee]">Project</span>
+                        <span className="flex items-center gap-2 font-mono text-[10px] font-medium tracking-[.16em] uppercase text-[#22d3ee]">项目</span>
                         <h2 id="about-title" className="text-[21px] font-semibold leading-[1.25] text-slate-100">关于项目</h2>
                     </div>
                     <button type="button" onClick={onClose} aria-label="Close" className="flex-none w-[34px] h-[34px] max-md:w-11 max-md:h-11 max-md:-mr-1.5 max-md:rounded-[10px] rounded-lg flex items-center justify-center text-slate-400 hover:bg-white/[.06] hover:text-slate-200 transition-colors">

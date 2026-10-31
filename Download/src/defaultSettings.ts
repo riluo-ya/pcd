@@ -5,6 +5,7 @@ export interface Settings {
     disableDiscordNotifications: boolean;
     exportIllustrationType: 'full' | 'blur';
     useNewUi: boolean;
+    advancedInfo: boolean;
     // New UI Sub-settings
     newUiAudioPreview: boolean;
     newUiAudioVolume: number;
@@ -28,6 +29,7 @@ export const defaultSettings: Settings = {
     includeInfoYml: true,
     disableDiscordNotifications: false,
     exportIllustrationType: 'full',
+    advancedInfo: false,
     useNewUi: true,
     newUiAudioPreview: false,
     newUiAudioVolume: 1,

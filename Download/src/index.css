@@ -257,3 +257,34 @@
     animation: none;
   }
 }
+
+/* 手机端：弹窗从屏幕底部升起，而不是从中心缩放淡入。
+   桌面用 dialogIn（居中缩放），这里按上游用媒体查询覆盖。 */
+@keyframes sheetIn {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@media (max-width: 767.98px) {
+  .motion-dialog {
+    animation: sheetIn 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
+/* 手机端 toast 从底部上滑（桌面是从中心偏下的位移） */
+@keyframes toastInMobile {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 关闭毛玻璃时用纯黑淡入替代 backdrop 的模糊动画 */
+@keyframes backdropFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}

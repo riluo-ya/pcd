@@ -373,7 +373,13 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {isSettingsOpen && <SettingsPopup isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />}
+            {isSettingsOpen && (
+                    <SettingsPopup
+                        isOpen={isSettingsOpen}
+                        onClose={() => setIsSettingsOpen(false)}
+                        onOpenSource={() => { setIsSettingsOpen(false); setIsSourceOpen(true); }}
+                    />
+                )}
             {isFaqOpen && <FAQPopup isOpen={isFaqOpen} onClose={() => setIsFaqOpen(false)} />}
             {isAboutOpen && <AboutPopup isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />}
             {isShareCardOpen && (
